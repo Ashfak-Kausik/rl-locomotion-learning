@@ -29,7 +29,7 @@ model = PPO(
 
 # Train the Lunarlander PPO agent for 300K-1M timesteps to see what happens 
 # Mostly 500K to 1M timesteps is enough to train a LunarLander PPO agent to a good level of performance.
-model.learn(total_timesteps = 500_000, progress_bar=True)
+model.learn(total_timesteps = 1_000_000, progress_bar=True)
 
 model.save("lunarlander_ppo")
 
