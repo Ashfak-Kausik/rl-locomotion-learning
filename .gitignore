@@ -1,1 +1,7 @@
 .venv/
+
+tb_logs/
+*.zip
+__pycache__/
+*.pyc
+.vscode/
