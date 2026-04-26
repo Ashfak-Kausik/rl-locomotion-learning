@@ -16,13 +16,13 @@ A pole is balanced on a cart. The agent must move the cart left or right to keep
 - **Solved at:** mean reward ≥ 475 (max is 500)
 
 ### What it covered
-- First introduction to the PPO (Proximal Policy Optimization) algorithm
-- Understanding what a policy is — a function that maps observations to actions
-- Understanding the training loop: observe → act → get reward → update policy
-- Reading TensorBoard metrics for the first time (`ep_rew_mean`, `explained_variance`, `entropy_loss`, etc.)
-- Understanding evaluation vs training — freezing the agent's brain and testing performance
-- The difference between the Gym API (`obs, info = env.reset()`) and the SB3 VecEnv API
-- Saving and loading trained models
+- First introduction to the PPO (Proximal Policy Optimization) algorithm.
+- Understanding what a policy is — a function that maps observations to actions.
+- Understanding the training loop: observe → act → get reward → update policy.
+- Reading TensorBoard metrics for the first time (`ep_rew_mean`, `explained_variance`, `entropy_loss`, etc.).
+- Understanding evaluation vs training — freezing the agent's brain and testing performance.
+- The difference between the Gym API (`obs, info = env.reset()`) and the SB3 VecEnv API.
+- Saving and loading trained models.
 
 ### What happened
 Trained for 100,000 timesteps. The agent went from a mean reward of ~21 (barely surviving) to a consistent mean reward of ~500 (perfectly balancing the pole indefinitely). The `ep_rew_mean` curve showed a clean S-curve of learning — flat early, steep middle, plateau at the top. A perfect first RL result.
@@ -41,11 +41,11 @@ A spacecraft must land safely on a landing pad between two flags. The agent cont
 - **Solved at:** mean reward ≥ 200
 
 ### What it covered
-- A significantly harder environment than CartPole — more observations, more actions, more complex reward structure
-- Seeing how training instability looks in practice — the agent peaked around 850k steps then experienced **policy collapse**, where continued training actually degraded performance
-- Understanding why more training is not always better, and why saving the best checkpoint during training (using `EvalCallback`) matters
-- Comparing multiple PPO runs (PPO_1 through PPO_4) on TensorBoard and seeing how different training lengths affect all metrics
-- Understanding `explained_variance` as a measure of how accurately the value function predicts future rewards, and watching it drop when the policy destabilizes
+- A significantly harder environment than CartPole — more observations, more actions, more complex reward structure.
+- Seeing how training instability looks in practice — the agent peaked around 850k steps then experienced **policy collapse**, where continued training actually degraded performance.
+- Understanding why more training is not always better, and why saving the best checkpoint during training (using `EvalCallback`) matters.
+- Comparing multiple PPO runs (PPO_1 through PPO_4) on TensorBoard and seeing how different training lengths affect all metrics.
+- Understanding `explained_variance` as a measure of how accurately the value function predicts future rewards, and watching it drop when the policy destabilizes.
 
 ### What happened
 Trained for 300k, 500k, and 1M timesteps across multiple runs. The 1M run peaked at around 860k steps with `explained_variance` near 0.96 and consistent landings, then collapsed — `ep_len_mean` dropped, rewards became inconsistent, and `explained_variance` fell to ~0.6. Evaluation showed mean rewards of 220–274, well above the solved threshold of 200, confirming the agent genuinely learned to land. The sweet spot was estimated at around 700k–800k steps.
@@ -57,7 +57,7 @@ Trained for 300k, 500k, and 1M timesteps across multiple runs. The 1M run peaked
 ### What it is
 An underpowered pendulum must be swung up from a hanging position and held upright. Unlike CartPole, the agent cannot simply push left or right — it must apply a continuous torque value anywhere between -2 and +2 Nm. There is no termination condition; every episode runs for exactly 200 steps regardless of performance.
 
-### Why it is fundamentally different
+### Why is it fundamentally different?
 
 | | CartPole | LunarLander | Pendulum |
 |---|---|---|---|
@@ -89,7 +89,7 @@ Rather than training once, we ran Pendulum at multiple timestep budgets delibera
 | PPO_1 | 100,000 | -778.98 | Still learning, not converged |
 | PPO_2 | 300,000 | ≥ -200 ✅ | Solved — agent consistently balancing |
 | PPO_3 | 500,000 | Solved+ | Diminishing returns, policy stabilized |
-| PPO_4 | 1,000,000 | Solved+ | No meaningful improvement over 300k |
+| PPO_4 | 1,000,000 | Solved+ | Some interesting outputs in the tensorboard visuals after 800K. For instance, in the ep_lean_mean: The curve rises beautifully to ~900-1000 steps, then drops back down around 850k steps. Likewise there were some other interesting findings in other metrics too. Almost all centered around the term "policy collapse or overtraining instability" which is- PPO keeps updating the policy even when it's already good. Small updates can accidentally "nudge" the policy away from what was working. The agent unlearns a subtle part of its strategy and episodes get shorter again. |
 
 **The key finding: 300k was the sweet spot.** Beyond that, the agent had already converged and additional training added no meaningful improvement — unlike LunarLander where overtraining caused actual degradation, Pendulum simply plateaued.
 
