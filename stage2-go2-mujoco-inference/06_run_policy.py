@@ -12,7 +12,7 @@ Architecture:
         5. Body outputs 12-dim action (joint position deltas).
         6. Action -> joint targets -> PD controller -> motor torques. 
 
-Policy runs at 50 Hz (every 4th physics step at 0.005s timestep).        
+Policy runs at 50 Hz (every 10th physics step at 0.002s timestep).        
 """
 
 import mujoco 
@@ -28,10 +28,10 @@ POLICY_DIR = "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/gait-co
 
 # Training using these exact values - must match for sim-to-sim transfer. 
 DEFAULT_JOINT_POS = np.array([
-    -0.1, 0.8, -1.5,  # Front Left leg (hip, thigh, calf)
-     0.1, 0.8, -1.5,  # Front Right leg (hip, thigh, calf)
-    -0.1, 1.0, -1.5,  # Rear Left leg (hip, thigh, calf)
-     0.1, 1.0, -1.5   # Rear Right leg (hip, thigh, calf)
+     0.1, 0.8, -1.5,   # FL
+    -0.1, 0.8, -1.5,   # FR
+     0.1, 1.0, -1.5,   # RL
+    -0.1, 1.0, -1.5,   # RR
 ])
 
 # From our training config dump:
@@ -60,8 +60,9 @@ HIP_SCALE_REDUCTION = 0.5  # hips get smaller deltas (more conservative).
 KP = 25.0
 KD = 0.6
 
-# Control: policy at 50 Hz, sim at 200 Hz -> decimation factor of 4.
-DECIMATION = 4
+# Control: policy at 50 Hz, sim at 500 Hz -> decimation factor of 10.
+# sim runs at 500 Hz (0.002s timestep)
+DECIMATION = 10
 
 # History length for adaptation module:
 HISTORY_LEN = 30  # timesteps
@@ -69,23 +70,23 @@ OBS_DIM = 70     # dims per timestep
 
 # COMMANDS - what we'd "ask" the robot to do.
 
-# Trying a slow forward walk:
+# Explicit trot command:
 COMMANDS = np.array([
-    0.5,   # 0: lin_vel_x (m/s): walk forward at 0.5 m/s
-    0.0,   # 1: lin_vel_y (m/s): no strafing
-    0.0,   # 2: ang_vel_yaw (rad/s): no turning
-    0.0,   # 3: body_height (m): no change from default height
-    3.0,   # 4: step_frequency (Hz): 3 steps per second
-    0.5,   # 5: gait_phase (Hz): 0.5 = trot
-    0.0,   # 6: gait_offset (rad): no phase offset
-    0.0,   # 7: gait_bound
-    0.5,   # 8: gait_duration (s): each step lasts 0.5s
-    0.08,  # 9: footswing_height (m): lift
-    0.0,   # 10: body_pitch (rad): no pitch
-    0.0,   # 11: body_roll (rad): no roll
-    0.0,   # 12: stance_width (m): no change
-    0.0,   # 13: stance_length (m): no change
-    0.0,   # 14: aux_reward (for training, not used in control)
+    0.5,   # 0: lin_vel_x (m/s)
+    0.0,   # 1: lin_vel_y (m/s)
+    0.0,   # 2: ang_vel_yaw (rad/s)
+    0.0,   # 3: body_height (m)
+    2.0,   # 4: step_frequency (Hz): lower to 2 Hz for cleaner trot
+    0.5,   # 5: gait_phase (Hz): 0.5 = trot (diagonal pairs)
+    0.0,   # 6: gait_offset
+    0.0,   # 7: gait_bound: keep at 0 (non-zero triggers bound)
+    0.5,   # 8: gait_duration (s)
+    0.06,  # 9: footswing_height (m): lower slightly
+    0.0,   # 10: body_pitch (rad)
+    0.0,   # 11: body_roll (rad)
+    0.0,   # 12: stance_width (m)
+    0.0,   # 13: stance_length (m)
+    0.0,   # 14: aux_reward
 ])
 
 # Scale each command by its corresponding obs_scale
@@ -148,16 +149,24 @@ def build_obs(data, prev_action, last_action, gait_phase_t):
     joint_pos_obs = (joint_pos - DEFAULT_JOINT_POS) * OBS_SCALES["dof_pos"]
     joint_vel_obs = joint_vel * OBS_SCALES["dof_vel"]
 
-    # Clock signals: trot pattern
-    # FR & RL move togther (phase 1), FL & RR move together (phase 2 = phase 1 + 0.5)
-    phase_a = gait_phase_t
-    phase_b = (gait_phase_t + 0.5) % 1.0
-    clock = np.array([
-        np.sin(2 * np.pi * phase_a),  # FR & RL
-        np.cos(2 * np.pi * phase_b),
-        np.sin(2 * np.pi * phase_a),  # FL & RR
-        np.cos(2 * np.pi * phase_b),
-    ])
+    # Per-foot phases, derived as in training (see legged_robot.py line ~720)
+    # Foot 0: gait_phase_t + phases + offsets + bounds
+    # foot 1: gait_phase_t + offsets
+    # foot 2: gait_phase_t + bounds
+    # foot 3: gait_phase_t + phases
+    phases = COMMANDS[5]               # gait_phase_cmd
+    offsets = COMMANDS[6]              # gait_offset
+    bounds = COMMANDS[7]               # gait_bound
+    foot_phases = np.array([
+        (gait_phase_t + phases + offsets + bounds),
+        gait_phase_t + offsets,
+        gait_phase_t + bounds,
+        gait_phase_t + phases,
+    ]) % 1.0                           # wrap to [0, 1]
+
+    # Note: With gate_duration = 0.5 (default), the stance/swing remapping is the identity, so we skip it. If duration changes, must add remapping.
+
+    clock = np.sin(2 * np.pi * foot_phases)  # convert to clock signals for each foot
 
     obs = np.concatenate([
         projected_grav,    # 3
@@ -178,7 +187,18 @@ data = mujoco.MjData(model)
 
 key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
 mujoco.mj_resetDataKeyframe(model, data, key_id)
+
+# Override the keyframe joints with the training default pose
+# (the menagerie keyframe uses different angles than walk-these-ways training)
+data.qpos[7:19] = DEFAULT_JOINT_POS
+data.qpos[2] = 0.30  # also set body height
 mujoco.mj_forward(model, data)
+
+print("\n=== Actuator joint order ===")
+for i in range(model.nu):
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
+    print(f"  ctrl[{i}] -> {name}")
+print()
 
 print(f"Sim timestep: {model.opt.timestep}s, control frequency: {1/(model.opt.timestep*DECIMATION)} Hz")
 print(f"Decimation: {DECIMATION} -> policy at {1/(model.opt.timestep*DECIMATION)} Hz")
@@ -262,7 +282,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
             base_pos = data.qpos[0:3]
             base_lin_vel = data.qvel[0:3]
             print(f"Time: {data.time:.2f}s | Base pos: {base_pos} | Base lin vel: {base_lin_vel}")
-        t_last_print = data.time
+            t_last_print = data.time
 
         sim_step += 1
         viewer.sync()  # sync to real time (will slow down if sim is running too fast)
