@@ -7,6 +7,8 @@ End-to-end research project on reinforcement learning for legged robot locomotio
 > **Platform constraint:** Developed on CPU-only hardware; GPU usage limited to bursty training sessions on cloud platforms.
 
 ---
+![Go2 Walking in MuJoCo](media/stage2_walking.gif)
+---
 
 ## Project Scope
 
