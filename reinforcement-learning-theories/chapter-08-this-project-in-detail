@@ -1,0 +1,144 @@
+# Chapter 8 — This Project in Detail: Every Run, Every Curve, Every Insight
+
+## What this chapter is about
+
+This is the chapter that turns the abstract into the concrete. If chapters 1–7 were "here's how RL works in general," this is "here's exactly what happened when we did it." Every training run, every TensorBoard curve we watched, every bug we hit, every fix we applied. The chapter you read when you want to know *exactly* what to expect when you reproduce this work.
+
+It's longer than the others — about 2000 words. Read it slowly. It's the document you'll come back to later when you've forgotten the details.
+
+---
+
+## Stage 1, Project 1 — CartPole-v1
+
+The simplest experiment. PPO with default Stable-Baselines3 hyperparameters, no parallelism, 25,000 timesteps on CPU.
+
+The training curve went from `ep_rew_mean ≈ 20` at the start to `ep_rew_mean = 500` (the maximum) within about 10,000 timesteps. After that the curve was flat at 500 because the env caps episodes there — even a better policy couldn't earn more.
+
+Three lessons came out of this:
+
+**Lesson 1 — timestep ≠ episode.** A timestep is one action. An episode is one start-to-fall sequence. Early episodes are short (random policy falls over fast), so 25K timesteps might be 1000 short episodes early in training and 50 long episodes by the end. The `ep_rew_mean` rises as much because episodes get longer as because reward per step changes.
+
+**Lesson 2 — more timesteps is not better past a saturation point.** Going from 25K to 1M timesteps didn't make the policy any better — it just kept training a policy that had already maxed out. In your experiment, you watched the policy *wobble*: `ep_rew_mean` dropped from 500 back to ~200 around 850K timesteps before recovering. That was the policy drifting through small parameter changes that happened to be locally worse. Real failure mode in RL.
+
+**Lesson 3 — TensorBoard tells the story.** `policy_gradient_loss`, `value_loss`, `entropy_loss` all showed the expected shape: rapid early changes, then plateau. The `explained_variance` rose from ~0 to ~0.95, meaning the critic learned to predict returns well.
+
+The eval result was `mean_reward = 500.00 ± 0.00` over 10 episodes. Perfect score, zero variance — the policy is fully deterministic and optimal on this environment.
+
+---
+
+## Stage 1, Project 2 — LunarLander-v3
+
+A meaningful step up. Multi-component shaped reward, 8 environments in parallel, 300K timesteps. The reward was a mix of:
+
+- Shaped distance/velocity terms (continuous)
+- +100 for soft landing, −100 for crash (sparse)
+- −0.3 per main-engine fire (fuel cost)
+- +10 per leg in contact
+
+The curve had a characteristic shape:
+
+- **0–30K timesteps:** `ep_rew_mean ≈ −150 to −200`. The policy is essentially random. It crashes immediately, sometimes flying out of bounds. Tossed-coin behavior.
+- **30K–100K:** Climb to ~−50. The policy has figured out "fire the main engine sometimes." It hovers, then crashes, but slowly.
+- **100K–200K:** Crosses into positive. `ep_rew_mean ≈ 0 to +100`. Sometimes lands, often crashes. Huge variance.
+- **200K–300K:** Climbs toward +200 (the "solved" threshold). Variance shrinks.
+
+Your eval over 20 episodes gave `mean_reward = 246 ± 90`. Standard deviation of 90 is significant — even a good policy occasionally crashes here because the starting conditions are randomized. That's expected.
+
+Three observations stand out:
+
+**Observation 1 — reward shaping is a Faustian bargain.** The shaped reward (distance penalty, velocity penalty, etc.) makes early learning much faster than a pure +100/−100 sparse signal would. But it also creates the risk of "reward hacking" — the policy finding a way to maximize the shaped components without doing the actual task. You probably saw episodes where the lander hovered indefinitely, soaking up small positive rewards for "being close" without ever landing. That's reward hacking in miniature.
+
+**Observation 2 — `clip_fraction` matters.** Yours peaked around 0.31 at 130K timesteps. Healthy. If it had stayed at 0.5+, the policy was changing too fast per update and the clipping was overworked.
+
+**Observation 3 — the `gamma=0.999` was important.** Higher than the default 0.99. Because the +100 landing reward is delayed by 50–200 timesteps from the moment the policy makes good decisions, the policy needs to value future rewards heavily. `gamma=0.99` would have given the +100 only `0.99^200 ≈ 13` weight by the time the policy was deciding what to do. `gamma=0.999` gives it `0.999^200 ≈ 82` weight. Big difference.
+
+---
+
+## Stage 1, Project 3 — Pendulum-v1
+
+Your first continuous-action experiment. 100K timesteps initially, then 300K more after watching the curve still climb. Final eval: `mean_reward = −151 ± 90`.
+
+Pendulum is one of the cleanest experiments to watch because the failure modes are visible:
+
+- **Bottom-stuck:** Policy never builds enough momentum, pendulum hangs near the bottom.
+- **Over-swing:** Policy swings too hard, pendulum flies past vertical and oscillates wildly.
+- **Catch and hold:** Trained policy swings, slows at the top, catches and holds.
+
+You saw the "catch and hold" behavior at the end. Beautiful to watch.
+
+Your TensorBoard tour from the run was the most thorough one. Recap:
+
+- **`ep_rew_mean`** climbed steadily from −1400 to ~−150 over 400K timesteps. No catastrophic drops, occasional small wobbles — healthy.
+- **`approx_kl`** rose from 0.05 to 0.32 around 200K, then settled back to 0.15. The spike at 200K was the policy doing rapid learning; after that it was fine-tuning.
+- **`clip_fraction`** peaked at 0.61 around 240K. We noted this was high — the learning rate was slightly too aggressive for this env, but not catastrophically so.
+- **`entropy_loss`** went from −1 to ~0 by 300K. The Gaussian policy was shrinking its std as it converged. Textbook shape.
+- **`explained_variance`** climbed to 0.86 — the critic was tracking values well. Slightly under the ideal 0.95 but acceptable.
+- **`mean_value_loss`** dropped from 400+ to 20–30. The critic's regression loss falling as it learned to predict returns.
+- **`policy_gradient_loss`** wandered between −0.11 and −0.03. The wandering is normal — this is the value of the (negated) objective, not a target to minimize per se.
+
+The biggest takeaway from Pendulum: you learned to *read* training. That skill is more valuable than the specific algorithm being trained.
+
+---
+
+## Stage 2 — the simulation transfer
+
+Stage 2 was deployment, not training. You took the pretrained `walk-these-ways-go2` policy and got it running in MuJoCo. The journey had five sub-stages, but the real story is in Stage 2.5, where everything came together.
+
+**Stage 2.1 — Hello, Go2.** Loaded the MJCF, opened the viewer, saw the robot collapse under gravity. No controller, so gravity won immediately. We confirmed end-to-end plumbing: file path correct, viewer functional, robot rendered.
+
+**Stage 2.2 — Inspect model.** Programmatically enumerated 19 generalized positions, 18 generalized velocities, 12 actuators, 21 bodies. Confirmed the quaternion convention for orientation. The 19 vs 18 asymmetry (orientation uses 4 numbers for position but 3 for velocity) was the first thing you internalized about robot simulation.
+
+**Stage 2.3 — PD pose holding.** First active control. We discovered the `mujoco_menagerie` Go2 uses raw torque motors, not position motors. Round 1: wrong actuator assumption, robot collapsed. Round 2: feeding qpos back as target, robot still collapsed (zero error → zero torque → gravity wins). Round 3: implementing a proper PD controller with `kp=100, kd=2`, robot stood. This was when you first felt the gap between "I see the robot's joints" and "I can command them."
+
+**Stage 2.4 — Build obs vector.** Constructed the 70-dim observation by hand. Cross-referenced against the training code's `compute_observations` function. Discovered the structure is: 3 gravity + 15 commands + 12 joint pos + 12 joint vel + 12 current action + 12 prev action + 4 clock. The educational version (your `04_build_obs_vector.py`) used a different layout, but that was fine — it taught the concept. The production-correct layout came in 2.5.
+
+**Stage 2.5 — Run the policy.** The climax. Let me walk through the failure modes you encountered, in order:
+
+*Failure 1 — Bouncing/jumping gait at 125 Hz.* Initial run with `DECIMATION=4` gave a policy frequency of 125 Hz. The robot bounced — lifting all four legs at once, hopping forward an inch at a time. Cause: policy was trained at 50 Hz, running it at 125 Hz disrupted its gait rhythm. Fix: `DECIMATION=10` → 50 Hz. Cleaner gait timing.
+
+*Failure 2 — Robot collapses at 50 Hz.* After fixing the frequency, the robot lurched and collapsed. NaN values appeared in `data.ctrl` at t=8.52s. The simulation became unstable. We initially suspected `gait_bound` (a red herring suggested by an AI assistant) but ruled it out. Cause: still unclear at the time.
+
+*Failure 3 — Drifting sideways at 1.4 m/s.* After more iterations, the robot would walk briefly and then drift sideways hard. Cause: the clock signal had `[sin(a), cos(b), sin(a), cos(b)]` — duplicated entries, missing per-foot variation. Fix: read the training source code's exact construction. The actual clock is `[sin(2π·fi)]` for each foot, with per-foot phases derived from the gait commands. Once we built the foot phases correctly (foot 0 = `gait_phase + offset + bound`, foot 1 = `offset`, foot 2 = `bound`, foot 3 = `gait_phase`), the clock signal carried the trot rhythm.
+
+*Failure 4 — Robot still drifts sideways and falls.* Even with the right clock, the robot drifted right. Cause: the MJCF's "home" keyframe pose differed from the training default pose. Joints started at slightly wrong angles, the policy saw nonzero deviations at standstill, and tried to correct. Fix: override `data.qpos[7:19]` with the training default pose after loading the keyframe.
+
+*Failure 5 — Hip signs flipped.* The training config had `FL_hip=+0.1, FR_hip=-0.1, RL_hip=+0.1, RR_hip=-0.1`. Our code had the opposite signs. Cause: I (Claude) supplied wrong values in an earlier code sample without cross-referencing your training config. Fix: match the signs exactly to training. Robot started walking. **Sustained forward locomotion at ~0.28 m/s.**
+
+The total debugging journey for Stage 2.5 was about 5 hours of iterative diagnosis. Each failure left a specific symptom. Each fix came from comparing our code against the training source code. The principle that emerged: **the policy is a function, and any deviation from the function's training-time inputs (in observation structure, scale, default pose, joint convention, control rate) results in subtly broken outputs.**
+
+---
+
+## What the final result actually looks like
+
+When the policy works:
+
+- Robot stands at the start
+- Begins a trot — diagonal pairs of legs lift and step
+- Forward velocity reaches ~0.28 m/s within 1 second (commanded 0.5 m/s — there's slip)
+- Body height stays at 0.275 m ± 0.005 m
+- The robot walks in a slow curve due to a small yaw bias (visible in your 60-second trajectory)
+- After 60 seconds, the robot has walked roughly 17 meters in a wide curve
+
+The discrepancy between commanded velocity (0.5 m/s) and achieved velocity (0.28 m/s) is normal for sim-to-sim transfer. The policy was trained in Isaac Gym with specific contact friction, motor strength, and timing parameters. MuJoCo's defaults differ, and the policy doesn't quite achieve full commanded velocity. To recover the lost velocity, you'd need to tune MuJoCo's contact parameters to match Isaac Gym's, or use more aggressive command values to compensate.
+
+The yaw drift (robot walks in a curve) is a smaller mystery — possibly a small bias in the body-frame gravity projection, possibly an artifact of the policy expecting closed-loop yaw correction from an operator. We left it as an open issue.
+
+---
+
+## What we learned, in compressed form
+
+- **Toy environments teach the algorithm.** PPO on CartPole, LunarLander, Pendulum is not robotics — but it builds the intuition that everything in robot RL is built on.
+- **Reading training source code beats reading documentation.** Every fix in Stage 2.5 came from reading `legged_robot.py`, not from docs. The training code is the ground truth.
+- **Sim-to-sim transfer is real.** Even between simulators, physics differs. A policy must be re-tuned (or originally trained with enough randomization) to work across simulators.
+- **Observation construction is part of the policy.** The 70-dim vector isn't just data; it's an interface, with strict ordering, scaling, and frame conventions. Get any of them wrong silently, and the robot fails.
+- **Sustained walking on the first deployment is a real achievement.** Most beginners spend weeks here. You did it in days, because you debugged systematically and read source code.
+
+---
+
+## What comes next
+
+Stage 3 is training. We'll set up MJX or `mujoco_playground` on a free-tier GPU, train a custom Go2 policy from scratch, and watch the same training curves you watched in Stage 1 — but applied to a 12-joint robot instead of a 4-dim cart. The pipeline you built in Stage 2.5 will let us *evaluate* our trained policy in MuJoCo immediately.
+
+Stage 4 adds vision. Stage 5 adds ROS2. Stage 6 (if hardware is available) is sim-to-real.
+
+The framework is set. The infrastructure works. The debugging muscle is built. From here, it's just more compute and more time.
