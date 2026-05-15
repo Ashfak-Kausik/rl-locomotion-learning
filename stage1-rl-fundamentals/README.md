@@ -36,6 +36,8 @@ Trained for 100,000 timesteps. The agent went from a mean reward of ~21 (barely 
 ### What it is
 A spacecraft must land safely on a landing pad between two flags. The agent controls three engines (left, right, main) to guide the lander down without crashing.
 
+![LunarLander Demo](../media/stage1_lunarlander.gif)
+
 ### Specs
 - **Observations:** 8 (x/y position, x/y velocity, angle, angular velocity, leg contact left/right)
 - **Actions:** 4 discrete (do nothing, fire left engine, fire main engine, fire right engine)
@@ -55,6 +57,8 @@ Trained for 300k, 500k, and 1M timesteps across multiple runs. The 1M run peaked
 ---
 
 ## Project 3 — Pendulum (Pendulum-v1)
+
+![Pendulum Demo](../media/stage1_pendulum.gif)
 
 ### What it is
 An underpowered pendulum must be swung up from a hanging position and held upright. Unlike CartPole, the agent cannot simply push left or right — it must apply a continuous torque value anywhere between -2 and +2 Nm. There is no termination condition; every episode runs for exactly 200 steps regardless of performance.

@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 .vscode/
 MUJOCO_LOG.TXT
+*.zip
+tb_logs/
