@@ -9,6 +9,8 @@ This stage covers the foundational projects in Reinforcement Learning, progressi
 ### What it is
 A pole is balanced on a cart. The agent must move the cart left or right to keep the pole from falling over.
 
+![CartPole Demo](../media/stage1_cartpole.gif)
+
 ### Specs
 - **Observations:** 4 (cart position, cart velocity, pole angle, pole angular velocity)
 - **Actions:** 2 discrete (move left, move right)
