@@ -36,8 +36,6 @@ The `walk-these-ways` policy — originally trained in Isaac Gym on a GPU cluste
 | Control frequency | Policy 50 Hz, simulation 500 Hz, decimation 10 |
 | Inference latency | <2 ms per policy step (CPU) |
 
-![Go2 walking in MuJoCo](media/stage2_walking.gif) <!-- TODO: add demo gif -->
-
 ### Sim-to-Sim Transfer Findings
 
 Migrating a policy trained in Isaac Gym to MuJoCo surfaced several non-trivial mismatches. The principled fixes from this work are documented in [`stage2-go2-mujoco-inference/`](./stage2-go2-mujoco-inference/) and summarized below:
