@@ -136,9 +136,6 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
         adapt_net = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")
         adapt_net.eval()
 
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
     model = mujoco.MjModel.from_xml_path(scene_path)
     data = mujoco.MjData(model)
 
@@ -148,6 +145,26 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
         mujoco.mj_resetDataKeyframe(model, data, key_id)
     data.qpos[7:19] = DEFAULT_JOINT_POS
     data.qpos[2] = 0.30
+
+    # Controlled initial-condition randomization (seed-dependent).
+    # Represents real deployment variability: no two robot starts are
+    # identical. Makes trials genuinely independent for mean/std stats.
+    rng = np.random.default_rng(seed)
+    # Small joint angle perturbation (±0.02 rad ≈ ±1.1 deg)
+    data.qpos[7:19] += rng.uniform(-0.02, 0.02, size=12)
+    # Small base height perturbation (±1 cm)
+    data.qpos[2] += rng.uniform(-0.01, 0.01)
+    # Small base yaw perturbation (±0.05 rad ≈ ±2.9 deg)
+    yaw = rng.uniform(-0.05, 0.05)
+    # Apply yaw to the base quaternion (qpos[3:7] = [w,x,y,z])
+    half = yaw / 2.0
+    data.qpos[3] = np.cos(half)   # w
+    data.qpos[4] = 0.0            # x
+    data.qpos[5] = 0.0            # y
+    data.qpos[6] = np.sin(half)   # z (yaw rotation about vertical)
+    # Small initial joint velocity noise
+    data.qvel[6:18] += rng.uniform(-0.05, 0.05, size=12)
+
     mujoco.mj_forward(model, data)
 
     commands_vec = np.array([
