@@ -1,0 +1,43 @@
+======================================================================
+EXPERIMENT 2 — Gait Robustness (flat ground, cmd_vx=0.5 m/s)
+======================================================================
+Gaits: ['trot', 'pace', 'bound']
+Trials per gait: 5
+Total trials: 15
+======================================================================
+Loading policy networks...
+Policy loaded.
+
+--- Gait: trot ---
+  seed 0: vx=0.218 drift=0.174 h_std=0.006
+  seed 1: vx=0.231 drift=0.157 h_std=0.006
+  seed 2: vx=0.229 drift=0.160 h_std=0.006
+  seed 3: vx=0.228 drift=0.162 h_std=0.006
+  seed 4: vx=0.231 drift=0.157 h_std=0.006
+
+--- Gait: pace ---
+  seed 0: vx=0.330 drift=0.075 h_std=0.011
+  seed 1: vx=0.326 drift=0.090 h_std=0.011
+  seed 2: vx=0.326 drift=0.088 h_std=0.011
+  seed 3: vx=0.327 drift=0.087 h_std=0.011
+  seed 4: vx=0.325 drift=0.092 h_std=0.011
+
+--- Gait: bound ---
+  seed 0: vx=0.179 drift=0.198 h_std=0.002
+  seed 1: vx=0.162 drift=0.205 h_std=0.002
+  seed 2: vx=0.166 drift=0.203 h_std=0.002
+  seed 3: vx=0.167 drift=0.203 h_std=0.002
+  seed 4: vx=0.163 drift=0.204 h_std=0.002
+
+Wrote 15 rows to /home/user/projects/rl-locomotion-learning/stage2-go2-mujoco-inference/experiments/results/exp2_gait_robustness.csv
+
+======================================================================
+SUMMARY
+======================================================================
+  gait | survival |       mean_vx |     track_err |         drift |       h_std
+-------------------------------------------------------------------------------
+  trot |    100% |  0.227±0.005 |  0.273±0.005 |  0.162±0.006 | 0.006±0.000
+  pace |    100% |  0.327±0.002 |  0.173±0.002 |  0.087±0.006 | 0.011±0.000
+ bound |    100% |  0.167±0.006 |  0.333±0.006 |  0.203±0.002 | 0.002±0.000
+======================================================================
+Experiment 2 complete.

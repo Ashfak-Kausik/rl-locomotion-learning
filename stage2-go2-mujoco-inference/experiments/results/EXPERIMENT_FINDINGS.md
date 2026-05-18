@@ -86,8 +86,59 @@ instability.
 
 ---
 
-## Experiment 2 — Gait Robustness
-*(to be filled after run)*
+## Experiment 2 — Gait Robustness (flat ground, cmd_vx = 0.5 m/s)
+
+**Run date:** 2026-05-18
+**Script:** `exp2_gait_robustness.py`
+**Raw data:** `results/exp2_gait_robustness.csv`
+**Conditions:** gait ∈ {trot, pace, bound}, fixed cmd_vx = 0.5 m/s
+
+### Results table (mean ± std over 5 trials)
+
+| gait | survival | achieved vx | track err | lateral drift | height std |
+|------|----------|-------------|-----------|---------------|------------|
+| trot | 100% | 0.227±0.005 | 0.273±0.005 | 0.162±0.006 | 0.006±0.000 |
+| pace | 100% | 0.327±0.002 | 0.173±0.002 | 0.087±0.006 | 0.011±0.000 |
+| bound | 100% | 0.167±0.006 | 0.333±0.006 | 0.203±0.002 | 0.002±0.000 |
+
+### Findings
+
+**F2.1 — Gait-conditioning transfers robustly for ALL gaits (survival).**
+Contrary to the expectation (from informal interactive testing) that pace
+and bound would be unstable, all three gaits achieved 100% survival over
+5 trials at cmd=0.5 m/s on flat ground. The gait-conditioning mechanism
+itself survives Isaac-Gym → MuJoCo transfer.
+
+**F2.2 — Pace transfers BEST at moderate speed, not trot.**
+Counterintuitive headline finding. At cmd=0.5 m/s, pace achieves the
+highest forward velocity (0.327 vs trot 0.227), the lowest tracking error
+(0.173 vs trot 0.273), and the lowest lateral drift (0.087 vs trot 0.162).
+The policy's nominal "default" gait (trot) is NOT the best-transferring
+gait under MuJoCo physics at this speed. Overturns the naive assumption.
+
+**F2.3 — Bound trades forward progress for posture rigidity.**
+Bound has the lowest achieved velocity (0.167) and highest tracking error
+(0.333), but by far the most stable body height (h_std 0.002, ~3× more
+stable than trot's 0.006). Coherent physical story: bound is a stiff,
+hopping-style gait — poor forward efficiency, very rigid vertical posture.
+
+**F2.4 — Gaits occupy distinct points on a performance tradeoff surface.**
+Pace → best tracking + least drift. Trot → middling at everything.
+Bound → worst tracking, best posture rigidity. Gait choice is a
+multi-objective tradeoff under sim-to-sim transfer, not a strict ordering.
+
+### Caveat / limitation
+Tested only at cmd=0.5 m/s. Pace's advantage may not hold across the
+velocity range (cf. Exp 1, where trot's drift was minimal at cmd=1.0).
+A full gait × velocity grid is future work.
+
+### Paper usage
+- This is **Table 2** (gait robustness under transfer).
+- F2.2 is the surprising/headline result → Discussion section.
+- Pair with Exp 1: together they show transfer quality depends on BOTH
+  commanded velocity AND gait, in non-obvious ways.
+- Honest limitation (single speed) strengthens credibility — state it.
+
 
 ---
 
