@@ -142,5 +142,78 @@ A full gait × velocity grid is future work.
 
 ---
 
-## Experiment 3 — Terrain Robustness
-*(to be filled after run)*
+## Experiment 3 — Terrain Robustness (flat-trained policy, OOD generalization)
+
+**Run date:** 2026-05-18
+**Script:** `exp3_terrain.py` (+ `generate_terrain_scenes.py`)
+**Raw data:** `results/exp3_terrain.csv`
+**Conditions:** slopes {5,10,15,20,25}°, stairs {2,5,8,12,16}cm; trot, cmd_vx=0.5, 20s measure
+
+### Methodology note (important — strengthens the paper)
+Initial "traversable = survival ≥ 80%" metric was found to be FLAWED:
+the robot can survive by safely stalling at the base of an obstacle
+(no fall, but no progress either). Detected via the distance_traveled
+column (deterministic 0.47 m stall at steps ≥5cm = robot stuck against
+first step, never climbing; run-up alone is 2.5 m). Metric corrected to
+require BOTH survival ≥80% AND mean distance > 3.5 m (run-up 2.5 m + ≥1 m
+genuine terrain progress). This defines a distinct non-catastrophic
+failure mode: "safe stall" (survives, no progress). Reporting this
+correction demonstrates measurement rigor.
+
+### Results — Slopes
+
+| slope | survival | mean_dist (survivors) | traversable |
+|-------|----------|------------------------|-------------|
+| 5° | 100% | 5.76±0.00 | YES |
+| 10° | 100% | 5.43±0.01 | YES |
+| 15° | 20% | 4.75 (1/5) | no |
+| 20° | 0% | — | no |
+| 25° | 0% | — | no |
+
+### Results — Stairs
+
+| step height | survival | mean_dist | traversable |
+|-------------|----------|-----------|-------------|
+| 2 cm | 100% | 4.02±0.09 | YES (marginal) |
+| 5 cm | 100% | 0.47±0.01 (STALL) | no |
+| 8 cm | 100% | 0.47±0.01 (STALL) | no |
+| 12 cm | 100% | 0.47±0.01 (STALL) | no |
+| 16 cm | 100% | 0.48±0.00 (STALL) | no |
+
+### Findings
+
+**F3.1 — Maximum traversable slope = 10°.** Clean monotonic degradation:
+100% survival at 5°/10°, collapsing to 20% at 15° and 0% at ≥20°. Time-
+to-fall shortens with steepness (≈18s @ 20°, ≈15s @ 25°), indicating
+progressively faster instability onset.
+
+**F3.2 — Maximum traversable step height = 2 cm (marginal).** The policy
+clears only ~ankle-low 2cm steps, and even then with elevated variance
+(vx 0.020–0.056) indicating a struggle, not clean locomotion. At ≥5 cm
+the robot deterministically stalls 0.47 m in (never leaving the run-up
+region), neither climbing nor falling.
+
+**F3.3 — Slope/step asymmetry (HEADLINE INSIGHT).** A flat-trained policy
+tolerates 10° inclines but fails at 5 cm steps. Hypothesis: slopes
+preserve continuous ground contact — the learned flat-ground gait remains
+viable when merely tilted — whereas steps require discrete foot-clearance
+behavior absent from flat-only training. Continuous vs. discrete terrain
+perturbation transfer very differently for blind locomotion.
+
+**F3.4 — "Safe stall": a non-catastrophic failure mode.** At steps ≥5 cm
+the policy neither progresses nor falls; it stabilizes against the
+obstacle indefinitely. Survival-only metrics misclassify this as success.
+Distinguishing "traversal" from "survival" is necessary for honest OOD
+evaluation of locomotion policies.
+
+**F3.5 — Flat-ground baseline (Exp 1) confirms attribution.** 100% flat
+survival at all speeds (Exp 1, F1.6) confirms Exp 3 failures are
+terrain-induced, not intrinsic policy instability.
+
+### Paper usage
+- **Table 3** (slopes) + **Table 4** (stairs), or a combined terrain table.
+- Figure: survival-rate vs. slope angle, and distance-vs-step-height
+  showing the stall plateau.
+- F3.3 is the strongest single insight → Discussion centerpiece.
+- F3.4 (metric correction) → Methodology, framed as rigor.
+- Direct motivation for Stage 3 / future work (terrain-curriculum training).
