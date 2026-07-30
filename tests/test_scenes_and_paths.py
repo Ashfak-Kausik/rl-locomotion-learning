@@ -219,3 +219,43 @@ def test_mujoco_requires_absolute_paths(scenes_dir, repo_root):
             mujoco.MjModel.from_xml_path(relative)
     finally:
         os.chdir(cwd)
+
+
+# ===========================================================================
+# Offscreen rendering
+# ===========================================================================
+def test_screenshot_resolution_fits_the_framebuffer(repo_root, scenes_dir):
+    """
+    Regression: 08_view_scene.py requested a 1920x1080 Renderer while every
+    scene declared MuJoCo's default 640x480 offscreen framebuffer, so the
+    screenshot feature raised on every use.
+
+    mujoco.Renderer REFUSES a request larger than the framebuffer rather than
+    resizing, so the model's offwidth/offheight must be enlarged BEFORE any
+    Renderer is constructed. This test pins that contract.
+    """
+    import re
+
+    src = (repo_root / "stage2-go2-mujoco-inference"
+           / "08_view_scene.py").read_text()
+
+    m = re.search(r"SHOT_WIDTH,\s*SHOT_HEIGHT\s*=\s*(\d+),\s*(\d+)", src)
+    assert m, "08_view_scene.py no longer declares SHOT_WIDTH/SHOT_HEIGHT"
+    want_w, want_h = int(m.group(1)), int(m.group(2))
+
+    assert "model.vis.global_.offwidth" in src, (
+        "08_view_scene.py must enlarge the offscreen framebuffer before "
+        "building a Renderer, or screenshots raise"
+    )
+
+    # The default really is smaller than what the script asks for — which is
+    # exactly why the enlargement is load-bearing rather than decorative.
+    model = mujoco.MjModel.from_xml_path(
+        str((scenes_dir / "go2_flat.xml").resolve()))
+    assert model.vis.global_.offwidth < want_w
+
+    # Applying the same fix the script applies must make the request legal.
+    model.vis.global_.offwidth = max(model.vis.global_.offwidth, want_w)
+    model.vis.global_.offheight = max(model.vis.global_.offheight, want_h)
+    assert model.vis.global_.offwidth >= want_w
+    assert model.vis.global_.offheight >= want_h

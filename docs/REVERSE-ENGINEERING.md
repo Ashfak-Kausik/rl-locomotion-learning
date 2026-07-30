@@ -161,6 +161,32 @@ then overwrites `qpos[7:19]`. Skipping the override silently offsets all 12
 joint observations. This is documented in the READMEs and correctly implemented
 everywhere except the superseded `04`.
 
+### R14 — The screenshot feature never worked (fixed)
+
+**Found by actually running the project**, not by reading it.
+
+`08_view_scene.py` built `mujoco.Renderer(model, height=1080, width=1920)`,
+but no scene declares `offwidth`/`offheight`, so MuJoCo's default 640x480
+offscreen framebuffer applied. `Renderer` **refuses** a larger request rather
+than resizing it, so every screenshot raised:
+
+```
+ValueError: Image width 1920 > framebuffer width 640.
+```
+
+The script exists specifically to capture paper figures, so its one job was
+broken from the day it was written. It went unnoticed because triggering it
+requires the policy checkpoints, which are missing on any machine but the
+author's.
+
+**Fix:** `SHOT_WIDTH, SHOT_HEIGHT` constants, and the model's framebuffer is
+enlarged in `main()` before any `Renderer` is constructed. Verified by
+rendering a real 1920x1080 frame. Pinned by
+`test_screenshot_resolution_fits_the_framebuffer`.
+
+**Worth generalising:** a test suite that only exercises importable code would
+never have caught this. Running the thing found it in minutes.
+
 ### R8 — Stale comments
 
 - `06_run_policy.py:240` — `# run for 30 seconds` above `< 60`.

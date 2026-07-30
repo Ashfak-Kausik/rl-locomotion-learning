@@ -236,9 +236,20 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
 # because the control code must run between steps.
 
 # Headless offscreen rendering — for screenshots/video with no window
+#
+# GOTCHA: the offscreen framebuffer defaults to 640x480, and Renderer REFUSES
+# a larger request rather than resizing. Enlarge it on the MODEL first, before
+# constructing any Renderer:
+model.vis.global_.offwidth = 1920
+model.vis.global_.offheight = 1080
+
 renderer = mujoco.Renderer(model, height=1080, width=1920)
 renderer.update_scene(data)
 frame = renderer.render()          # a (H, W, 3) uint8 NumPy array
+renderer.close()
+
+# Equivalently, declare it in the scene XML:
+#   <visual><global offwidth="1920" offheight="1080"/></visual>
 
 # No rendering at all — what the experiments do. Fastest by far.
 for step in range(n_steps):
@@ -620,6 +631,8 @@ change of *simulator*, it will not survive reality.
 | `ValueError: ... does not exist` on `.jit` | policy weights absent | `export GO2_POLICY_DIR=...` — see [DEPENDENCIES.md](DEPENDENCIES.md) |
 | Matplotlib hangs/crashes in Docker | interactive backend | `matplotlib.use("Agg")` before importing pyplot |
 | `mujoco.viewer` fails in Docker | no display | `MUJOCO_GL=osmesa`, or use the `viewer` compose service |
+| `Image width 900 > framebuffer width 640` | offscreen framebuffer defaults to 640×480 and `Renderer` will not resize | set `model.vis.global_.offwidth/offheight` **before** building the `Renderer` |
+| `GLFWError: GLX: Failed to create context` on a desktop | GPU driver/library mismatch (often an NVIDIA update without a reboot) | reboot; or force software GL: `LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa` |
 | `Box2D` import error | Box2D not built | install `swig`, `build-essential`, `python3-dev`, then reinstall `gymnasium[box2d]` |
 | Target array mutates on its own | NumPy slice is a view | `.copy()` |
 | `obs, info = env.reset()` unpack error | mixing Gym / VecEnv APIs | VecEnv `reset()` returns obs only |

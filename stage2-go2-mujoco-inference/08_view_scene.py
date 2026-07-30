@@ -48,6 +48,10 @@ SHOT_DIR = os.path.abspath(
 )
 os.makedirs(SHOT_DIR, exist_ok=True)
 
+# Screenshot resolution. See main(): the model's offscreen framebuffer must be
+# enlarged to at least this before any Renderer is built, or MuJoCo raises.
+SHOT_WIDTH, SHOT_HEIGHT = 1920, 1080
+
 # ----------------------------------------------------------------------------
 # Scene selection
 # ----------------------------------------------------------------------------
@@ -198,6 +202,14 @@ def main():
     print(f"Scene: {SCENE_PATH}")
     print("Loading model and policy...")
     model = mujoco.MjModel.from_xml_path(SCENE_PATH)
+
+    # MuJoCo's offscreen framebuffer defaults to 640x480, and mujoco.Renderer
+    # REFUSES any larger request rather than resizing. The screenshot below
+    # asks for 1920x1080, so without this the feature raises every time.
+    # Must be set on the model before any Renderer is constructed.
+    model.vis.global_.offwidth = max(model.vis.global_.offwidth, SHOT_WIDTH)
+    model.vis.global_.offheight = max(model.vis.global_.offheight, SHOT_HEIGHT)
+
     data = mujoco.MjData(model)
     reset_robot(model, data)
 
@@ -265,7 +277,8 @@ def main():
                 v.sync()
                 if cstate.screenshot_requested:
                     cstate.screenshot_requested = False
-                    r = mujoco.Renderer(model, height=1080, width=1920)
+                    r = mujoco.Renderer(model, height=SHOT_HEIGHT,
+                                        width=SHOT_WIDTH)
                     r.update_scene(data)
                     frame = r.render()
                     r.close()

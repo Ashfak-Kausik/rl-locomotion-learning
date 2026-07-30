@@ -196,6 +196,15 @@ Container equivalents in [`docs/DOCKER.md`](docs/DOCKER.md).
 | R5 | hip-index comment in `06_run_policy.py` names the legs in the wrong order (indices are right) |
 | R8 | `06_run_policy.py:240` says "30 seconds", code runs 60 |
 
+Rendering gotchas (both cost an afternoon):
+- MuJoCo's offscreen framebuffer defaults to 640x480 and `Renderer` raises
+  rather than resizing. Set `model.vis.global_.offwidth/offheight` BEFORE
+  constructing one. (`08_view_scene.py` shows the pattern.)
+- `GLX: Failed to create context` on a desktop is a GPU driver/library
+  mismatch needing a reboot. Workaround: `LIBGL_ALWAYS_SOFTWARE=1`.
+- `stage1-rl-fundamentals/tb_logs/` is **tracked in git** despite matching
+  `.gitignore` — never `rm` it.
+
 Resolved: R1/R2 (hardcoded paths → `paths.py`), R3 (stray `turtle` import),
 R9-R12 (deps, `.gitignore`, README), the 0.28 vs 0.227 m/s discrepancy, and the
 missing test suite.

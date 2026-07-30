@@ -405,11 +405,14 @@ class Trainer:
 
             if self.update % cfg.log_every_updates == 0:
                 recent = self.episode_returns[-20:]
-                mean_ret = np.mean(recent) if recent else float("nan")
+                # Episodes are longer than one rollout, so no episode has
+                # finished for the first few updates. Show "--" rather than
+                # a nan that reads like a divergence bug.
+                mean_ret = f"{np.mean(recent):>8.1f}" if recent else f"{'--':>8}"
                 sps = self.global_step / max(time.time() - self.start_time, 1e-6)
                 print(
                     f"upd {self.update:>5} | step {self.global_step:>9,} | "
-                    f"ret {mean_ret:>8.1f} | "
+                    f"ret {mean_ret} | "
                     f"kl {stats['approx_kl']:.4f} | "
                     f"clip {stats['clip_fraction']:.2f} | "
                     f"ev {stats['explained_variance']:>6.3f} | "
