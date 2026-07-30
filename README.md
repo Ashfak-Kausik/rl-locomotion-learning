@@ -2,7 +2,7 @@
 
 End-to-end research project on reinforcement learning for legged robot locomotion, with a focus on the Unitree Go2 quadruped platform. Covers RL algorithm fundamentals, simulation infrastructure, policy deployment, and a planned trajectory toward vision-conditioned and hardware-deployable controllers.
 
-> **Current milestone:** Pretrained `walk-these-ways` policy successfully deployed on the Unitree Go2 in MuJoCo. Robot achieves sustained forward locomotion at ~0.28 m/s.
+> **Current milestone:** Pretrained `walk-these-ways` policy successfully deployed on the Unitree Go2 in MuJoCo. Robot achieves sustained forward locomotion at 0.227 ± 0.005 m/s when commanded 0.5 m/s (measured, n=5).
 > **Active work:** Custom policy training on free-tier GPU infrastructure.
 > **Platform constraint:** Developed on CPU-only hardware; GPU usage limited to bursty training sessions on cloud platforms.
 
@@ -26,15 +26,29 @@ The methodology emphasizes principled engineering — reading source code over r
 
 ### Pretrained Policy Deployment (MuJoCo)
 
-The `walk-these-ways` policy — originally trained in Isaac Gym on a GPU cluster — has been deployed on the Unitree Go2 MJCF (from `mujoco_menagerie`) running entirely on CPU. Key results:
+The `walk-these-ways` policy — originally trained in Isaac Gym on a GPU cluster — has been deployed on the Unitree Go2 MJCF (from `mujoco_menagerie`) running entirely on CPU.
 
-| Metric | Value |
-|---|---|
-| Sustained forward velocity | ~0.28 m/s (commanded 0.5 m/s) |
-| Body height stability | 0.275 m ± 0.005 m |
-| Continuous walking duration | 60+ seconds without failure |
-| Control frequency | Policy 50 Hz, simulation 500 Hz, decimation 10 |
-| Inference latency | <2 ms per policy step (CPU) |
+All figures below are measured by the experiment harness over **5 seeded trials**
+(3 s settle + 30 s measurement window) and are reproducible from the committed
+raw data in [`experiments/results/exp1_velocity_sweep.csv`](./stage2-go2-mujoco-inference/experiments/results/exp1_velocity_sweep.csv).
+
+| Metric | Value | Source |
+|---|---|---|
+| Sustained forward velocity | **0.227 ± 0.005 m/s** (commanded 0.5 m/s) | Exp 1, n=5 |
+| Velocity tracking error | 0.273 ± 0.005 m/s | Exp 1, n=5 |
+| Body height | 0.2785 m, std 0.0060 m | Exp 1, n=5 |
+| Survival rate | 100% at every commanded velocity (0.0–1.5 m/s) | Exp 1, 30 trials |
+| Peak achieved velocity | 0.574 m/s (saturates; commanding 1.5 yields 0.558) | Exp 1 |
+| Control frequency | Policy 50 Hz, simulation 500 Hz, decimation 10 | source |
+| Inference latency | <2 ms per policy step (CPU) | timed during development |
+
+> **Note on an earlier figure.** Previous revisions of this README reported
+> ~0.28 m/s. That number predates the experiment harness — it came from a
+> single interactive run of `06_run_policy.py`, with no settle window, no
+> seeded initial conditions and no averaging across trials. The harness figure
+> of 0.227 ± 0.005 m/s supersedes it. The qualitative claim is unchanged and is
+> in fact the project's central finding: **the policy achieves only 37–55% of
+> commanded velocity after Isaac Gym → MuJoCo transfer.**
 
 ### Sim-to-Sim Transfer Findings
 
@@ -61,9 +75,9 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 
 > 4-dim observation, 2-dim discrete action, dense reward. Establishes the train-evaluate loop and policy/value network roles.
 
-| Result | 500/500 (max) |
+| Result | ~500 / 500 (max) |
 |--|--|
-| Timesteps | 25,000 |
+| Timesteps | 100,000 (`01_cartpole_ppo.py`) |
 | Compute | ~2 min, CPU |
 
 ![CartPole](media/stage1_cartpole.gif)
@@ -72,9 +86,9 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 
 > 8-dim observation, 4-dim discrete action, multi-component shaped reward. Introduces reward-engineering tradeoffs.
 
-| Result | 246 (solved threshold 200) |
+| Result | 220–274 (solved threshold 200) |
 |--|--|
-| Timesteps | 300,000 |
+| Timesteps | 1,000,000 trained; peak ~700k–800k before policy collapse |
 | Compute | ~15 min, CPU |
 
 ![LunarLander](media/stage1_lunarlander.gif)
@@ -83,9 +97,9 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 
 > 3-dim observation, 1-dim continuous action, Gaussian policy. Continuous action spaces are the algorithmic prerequisite for joint-level robot control.
 
-| Result | −151 (solved threshold −200) |
+| Result | ≥ −200 (solved threshold −200) |
 |--|--|
-| Timesteps | 400,000 |
+| Timesteps | 300,000 — the sweet spot; more added nothing |
 | Compute | ~10 min, CPU |
 
 ![Pendulum](media/stage1_pendulum.gif)
@@ -112,13 +126,17 @@ Full inference pipeline from MuJoCo state → 70-dim observation vector → adap
 
 | Tool | Version | Role |
 |---|---|---|
-| Python | 3.10 | Implementation |
-| Stable-Baselines3 | 2.x | PPO baseline for RL fundamentals |
-| Gymnasium | 0.29+ | Standard RL environments |
-| MuJoCo | 3.x | Physics simulation |
-| PyTorch | 2.1+ | Policy inference and (later) training |
-| TensorBoard | latest | Training diagnostics |
-| MJX / mujoco_playground | TBD | Planned for GPU-accelerated training |
+| Python | 3.10+ (3.12 verified) | Implementation |
+| Stable-Baselines3 | 2.4+ | PPO for Stage 1 and Stage 3 |
+| Gymnasium | 1.0+ | RL environment API (`LunarLander-v3` needs ≥ 1.0) |
+| MuJoCo | 3.2+ | Physics simulation |
+| PyTorch | 2.4+ (CPU build) | Policy inference, training, TorchScript export |
+| TensorBoard | 2.16+ | Training diagnostics |
+| pytest | 8+ | Contract test suite |
+| Docker | Compose v2 | Reproducible environment |
+| MJX / mujoco_playground | optional | GPU scale-up path for Stage 3 |
+
+Exact pins in [`requirements.txt`](./requirements.txt); run `./scripts/setup_env.sh` to install.
 
 ---
 
@@ -128,7 +146,7 @@ Full inference pipeline from MuJoCo state → 70-dim observation vector → adap
 |---|---|---|---|
 | **Stage 1** | RL fundamentals | Implement PPO on CartPole, LunarLander, and Pendulum to establish the algorithmic baseline. Build training-curve diagnostics intuition before applying RL to robotic control. | ✅ Complete |
 | **Stage 2** | Go2 inference in MuJoCo | Deploy the pretrained `walk-these-ways` policy on the Unitree Go2 in MuJoCo. Implement the full inference pipeline: observation construction, history buffer, adaptation module, dual-rate PD control. | ✅ Complete |
-| **Stage 3** | Custom Go2 policy training | Train a locomotion policy from scratch using MJX or `mujoco_playground` on free-tier GPU (Colab / Kaggle / Lightning AI). Investigate reward shaping, curriculum design, and domain randomization for transferability. | 🔄 In Progress |
+| **Stage 3** | Custom Go2 policy training | Full training stack implemented and verified end to end: contract-compliant environment, 12 reward terms, terrain curriculum derived from Experiment 3's measured failure boundaries, 8-parameter domain randomization, PPO + RMA two-phase training, checkpoint/resume, and TorchScript export that Stage 2's harness evaluates unmodified. 📁 [`stage3-go2-training/`](./stage3-go2-training/) | ⚙️ Pipeline complete — awaiting GPU compute for a converged policy |
 | **Stage 4** | Vision-conditioned locomotion | Integrate depth-camera input into the policy's observation space for terrain-aware locomotion (stairs, gaps, slopes). Extends from blind proprioceptive control to perceptive control. | ⏳ Planned |
 | **Stage 5** | ROS2 deployment infrastructure | Wrap the trained policy as a ROS2 node compatible with Unitree SDK2 deployment requirements. Establish the software interface required for hardware testing. | ⏳ Planned |
 | **Stage 6** | Sim-to-real validation | Quantify the sim-to-real gap on the physical Go2 platform (subject to hardware availability). Document failure modes and iterate on domain randomization parameters. | 🔮 Future |
@@ -154,6 +172,14 @@ rl-locomotion-learning/
 │   │   └── results/                   CSVs + EXPERIMENT_FINDINGS.md
 │   └── paper_figures/                 curated figures for the write-up
 │
+├── stage3-go2-training/               Custom policy training (contract-compliant)
+│   ├── networks.py                    the contract + RMA architecture
+│   ├── train.py                       PPO (phase 1) + distillation (phase 2)
+│   ├── export.py                      checkpoint → TorchScript, 4-way verified
+│   ├── evaluate.py                    exported policy vs baseline, via harness
+│   └── env/                           env, rewards, curriculum, domain rand
+│
+├── tests/                             93 tests; none need policy weights
 ├── docs/                              architecture, SRS, TDD, features, setup
 ├── scripts/                           setup_env.sh, check_env.py
 ├── docker/                            Dockerfile + 4 compose services
@@ -170,6 +196,7 @@ git clone <repo> && cd rl-locomotion-learning
 ./scripts/setup_env.sh          # detects your OS, installs everything, verifies
 source .venv/bin/activate
 make help                       # see every available target
+make test                       # 91 tests, no policy weights needed
 ```
 
 Or run it containerised, with no host dependencies beyond Docker:

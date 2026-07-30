@@ -9,7 +9,7 @@ verified. Derived by reading the code, not the roadmap.
 |---|---|
 | ✅ | Implemented and verified |
 | ⚠️ | Implemented with a caveat |
-| 🔄 | Declared in progress; **no code in the tree** |
+| 🔄 | Implemented but blocked on something external (e.g. compute) |
 | 📋 | Planned, specified, not started |
 | ❌ | Missing, and its absence matters |
 
@@ -22,14 +22,14 @@ verified. Derived by reading the code, not the roadmap.
 | Stage 1 — RL fundamentals | 12 | 0 | 0 | 0 | 1 |
 | Stage 2 — Go2 inference | 24 | 2 | 0 | 0 | 0 |
 | Research / experiments | 17 | 1 | 0 | 2 | 0 |
-| Documentation | 12 | 1 | 0 | 0 | 0 |
-| Infrastructure | 14 | 0 | 0 | 0 | 4 |
-| Stage 3 — training | 0 | 0 | 8 | 0 | 0 |
+| Documentation | 14 | 0 | 0 | 0 | 0 |
+| Infrastructure | 18 | 0 | 0 | 0 | 1 |
+| Stage 3 — training | 9 | 0 | 1 | 1 | 0 |
 | Stages 4–6 | 0 | 0 | 0 | 14 | 0 |
 
 **Headline:** everything the project claims to have *delivered* is genuinely
-delivered. The gap is Stage 3 (declared "in progress", zero code) and testing
-infrastructure (absent entirely).
+delivered. Stage 3's pipeline is now complete and verified end to end — what it
+lacks is GPU compute, not code. The remaining ❌ is a dependency lockfile.
 
 ---
 
@@ -51,6 +51,10 @@ infrastructure (absent entirely).
 | Hyperparameter comparison | ✅ | 4 runs per env | documented in README |
 | Best-checkpoint callback | ❌ | — | `EvalCallback` never used, despite the README identifying policy collapse as the reason you need it |
 
+Root-README result tables were reconciled against the source and the Stage 1
+analysis in this branch: timestep counts now match what the scripts actually
+run (100k / 1M / 300k), and reward figures cite the documented ranges.
+
 **Documented learning outcomes** (`stage1-rl-fundamentals/README.md`, 179
 lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 `approx_kl` 0.08 on Pendulum diagnosing an over-aggressive learning rate;
@@ -64,6 +68,7 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 
 | Feature | Status | Where |
 |---|---|---|
+| Contract test suite (70-dim, constants, scenes, paths) | ✅ | `tests/` — 93 tests |
 | Load Go2 MJCF | ✅ | `01_hello_go2.py` |
 | Self-contained model (no external checkout) | ✅ | `scenes/go2_model/` — 16 meshes |
 | Model introspection (bodies/joints/actuators/sensors) | ✅ | `02_inspect_go2.py` |
@@ -114,7 +119,7 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | Feature | Status | Evidence |
 |---|---|---|
 | Sustained forward walking | ✅ | Exp 1: 100% survival, all speeds |
-| Velocity command tracking | ⚠️ | works, but achieves only 37–55% of command — **this is the research finding**, not a defect |
+| Velocity command tracking | ⚠️ | 0.227 ± 0.005 m/s at commanded 0.5 (Exp 1, n=5); 37–55% of command across the sweep — **this is the research finding**, not a defect |
 | Trot gait | ✅ | Exp 2: 100% survival |
 | Pace gait | ✅ | Exp 2: 100% survival, **best tracking** |
 | Bound gait | ✅ | Exp 2: 100% survival, most rigid posture |
@@ -248,32 +253,38 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | Make targets | ✅ | `Makefile` |
 | `.gitignore` for large artefacts | ✅ | rewritten |
 | `.dockerignore` | ✅ | — |
-| **Automated tests** | ❌ | no `tests/`, no pytest |
-| **CI pipeline** | ❌ | no workflow |
-| **Linter / formatter config** | ❌ | none |
+| Automated tests | ✅ | `tests/` — 93 tests, ~3 s, no policy weights |
+| CI pipeline | ✅ | `.github/workflows/ci.yml` — py3.10 + 3.12, plus Docker |
+| Reproducibility check in CI | ✅ | figures + byte-identical scene regeneration |
+| Stage 3 round-trip check in CI | ✅ | export → harness, every push |
+| Make targets for tests + Stage 3 | ✅ | `make test`, `make train-smoke`, `make export` |
 | **Dependency lockfile** | ❌ | ranges only, no hashes |
 
 ---
 
-## 6. Stage 3 — custom training 🔄
+## 6. Stage 3 — custom training ⚙️
 
-Declared "in progress" in the README. **No code exists in the tree.** Nothing
-imports MJX or `mujoco_playground`.
+Implemented in `stage3-go2-training/` and verified end to end. See its
+[README](../stage3-go2-training/README.md).
 
-| Feature | Status |
-|---|---|
-| MJX / `mujoco_playground` Go2 environment | 🔄 |
-| Locomotion reward function | 🔄 |
-| Domain randomisation | 🔄 |
-| Terrain curriculum | 🔄 |
-| PPO training loop for free-tier GPU | 🔄 |
-| Checkpoint / resume across sessions | 🔄 |
-| TorchScript export in the existing contract | 🔄 |
-| Evaluation via the existing harness | 🔄 |
+| Feature | Status | Notes |
+|---|---|---|
+| Contract definition + runtime guard | ✅ | `networks.assert_contract()`, runs before any export |
+| Go2 training environment (CPU MuJoCo) | ✅ | emits the exact 70-dim observation; imports constants from `harness.py` |
+| Locomotion reward function | ✅ | 12 terms; exponential tracking kernel chosen because of Exp 1's under-tracking finding |
+| Domain randomisation | ✅ | 8 parameters, doubling as the RMA privileged vector |
+| Terrain curriculum | ✅ | 7 levels seeded by Experiment 3's measured failure boundaries |
+| PPO (RMA phase 1) | ✅ | GAE, KL early-stop, per-minibatch advantage normalisation |
+| Adaptation distillation (RMA phase 2) | ✅ | on-policy regression onto the privileged latent |
+| Checkpoint / resume across sessions | ✅ | optimiser, RNG, curriculum level, step counter |
+| TorchScript export in the existing contract | ✅ | verified 4 ways before writing |
+| Evaluation via the existing harness | ✅ | `evaluate.py`, compares against committed baseline CSVs |
+| **A converged policy** | 🔄 | needs GPU compute; ~600 policy steps/s on 8 CPU cores |
+| MJX / `mujoco_playground` backend | 📋 | designed; only `env/go2_env.py` is backend-specific |
 
-Design sketch in [TDD.md §9](TDD.md#9-design-for-stage-3). The critical
-requirement is contract compatibility — honour the 70/2100/2102/12 interface
-and every Stage 2 measurement tool works on the new policy unchanged.
+**The round-trip is proven**: a policy exported by `export.py` is loaded by
+`paths.load_policy()` and evaluated by `harness.run_trial()` with zero changes
+to Stage 2. CI runs that check on every push.
 
 ---
 
@@ -319,14 +330,14 @@ continuous slopes but not discrete steps.
 Ranked by value ÷ risk. Full reasoning in
 [REVERSE-ENGINEERING.md §9](REVERSE-ENGINEERING.md#9-suggested-first-contributions).
 
-1. **Test suite** ❌ — six tests, none needing policy weights, guarding the
-   observation contract and model dimensions. Nothing else is safe to refactor
-   until this exists.
-2. **CI workflow** ❌ — run `check_env.py` plus those tests on every push.
-3. **Gait × velocity grid** 📋 — 90 trials against code that already exists.
+1. **Gait × velocity grid** 📋 — ~90 trials against code that already exists.
    Experiment 2's surprising pace-beats-trot result is currently single-speed,
-   and the findings document flags that limitation itself. This is a real
-   research result reachable on a CPU tonight.
+   and the findings document flags that limitation itself. A real research
+   result reachable on a CPU tonight.
+2. **Train a Stage 3 policy on GPU** 🔄 — the pipeline is complete and
+   verified; what is missing is compute. Start from `--smoke`, then scale.
+3. **Port the Stage 3 env to MJX** 📋 — only `env/go2_env.py` is
+   backend-specific. Everything downstream works unchanged.
 4. **`EvalCallback` in Stage 1** ❌ — the README diagnoses policy collapse and
    explains why best-checkpoint saving matters, then never uses it.
 

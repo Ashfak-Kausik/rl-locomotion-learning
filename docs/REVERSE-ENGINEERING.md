@@ -255,9 +255,13 @@ experiment harness — it came from the interactive `06_run_policy.py` run, whic
 has no settle window, no seeded initial-condition randomisation, and no
 averaging over 5 trials. The harness number is the rigorous one.
 
-**Recommendation:** update the README to the measured value and cite the CSV.
-Not changed here, because revising a headline research claim is the repo
-owner's call.
+**Resolved.** The README now reports 0.227 ± 0.005 m/s, cites
+`exp1_velocity_sweep.csv`, states the measurement protocol (5 seeds, 3 s settle
++ 30 s window), and carries a note explaining why the earlier figure differed.
+The qualitative claim is unchanged and is in fact the project's headline
+finding. The Stage 1 result tables were reconciled the same way — their
+timestep counts had disagreed with the scripts (25k vs 100k, 300k vs 1M,
+400k vs 300k).
 
 ---
 
@@ -309,16 +313,19 @@ owner's call.
 
 Ordered by how soon it matters.
 
-### Stage 3 — custom policy training 🔄 (README: "in progress")
+### Stage 3 — custom policy training ⚙️ RESOLVED
 
-No code present. Nothing imports MJX or `mujoco_playground`; there is no
-training script, reward function, curriculum, or domain-randomisation config
-for the Go2. This is the largest gap between the roadmap and the tree.
+This was the largest gap between the roadmap and the tree. It is now
+implemented in `stage3-go2-training/`: a contract-compliant environment, 12
+reward terms, a 7-level curriculum derived from Experiment 3's measured
+failure boundaries, 8-parameter domain randomisation, PPO plus RMA phase-2
+distillation, checkpoint/resume, TorchScript export and evaluation against the
+baseline through Stage 2's own harness.
 
-Needs: an MJX/Brax or `mujoco_playground` env for the Go2; reward shaping;
-domain randomisation; a PPO training loop that runs on free-tier GPU; and a
-TorchScript export path so the result drops into the existing inference
-pipeline unchanged.
+What remains is **compute, not code**: ~600 policy steps/s on 8 CPU cores,
+against the 10⁸–10⁹ environment steps legged locomotion typically needs. The
+MJX/GPU port is designed and contained to one file. See the
+[Stage 3 README](../stage3-go2-training/README.md).
 
 ### Stage 4 — vision-conditioned locomotion ⏳
 
@@ -337,13 +344,14 @@ Not started; hardware-dependent.
 
 | Gap | Impact |
 |---|---|
-| **No tests at all** | no `tests/`, no pytest, no CI. Every refactor is unguarded. Highest-value gap. |
-| No CI workflow | nothing verifies that a PR still imports, let alone runs |
+| ~~No tests~~ | **RESOLVED** — 93 tests, none needing policy weights |
+| ~~No CI workflow~~ | **RESOLVED** — `.github/workflows/ci.yml` |
 | No linter/formatter config | style drifts; unused imports survive (see R3) |
 | No logging module | everything is `print()`; fine for scripts, awkward for long sweeps |
-| No CLI argument parsing | velocities, gaits and seeds are edited in source |
+| No CLI argument parsing in exp1/2/3 | velocities, gaits and seeds are edited in source (Stage 3 scripts do have `argparse`) |
 | No structured run metadata | CSVs record results but not git SHA, versions, or wall time |
-| Root README truncated | R12 |
+| No dependency lockfile | `requirements.txt` has ranges, no hashes |
+| ~~Root README truncated~~ | **RESOLVED** |
 
 ---
 
@@ -351,36 +359,39 @@ Not started; hardware-dependent.
 
 Ordered by (value ÷ risk). Every one is small enough for a first PR.
 
+Items 1, 2, 5, 6 and 11 from the original list are **done** — see the resolved
+entries above. What remains:
+
 **Tier 1 — safe, high value**
 
-1. **Add a smoke-test suite.** `tests/test_obs_vector.py`: assert
-   `build_obs(...)` returns shape `(70,)`; assert the flat scene loads with
-   `nq=19, nv=18, nu=12`; assert regenerated terrain XMLs match the committed
-   ones. No policy weights needed. This is the single most useful thing missing.
-2. **Add a CI workflow** running `check_env.py` + those tests on push.
-3. **Mark `04_build_obs_vector.py` superseded** with a header banner (R4).
-4. **Fix the stale comments** in R5 and R8.
-5. **Finish the root README's Repository Structure section** (R12).
+1. **Mark `04_build_obs_vector.py` superseded** with a header banner (R4).
+   `tests/test_constants.py` now asserts it still *disagrees* with
+   `harness.py`, but the file itself carries no warning.
+2. **Fix the stale comments** in R5 and R8.
+3. **Add a linter config** (ruff). The stray `turtle` import in R3 would have
+   been caught automatically.
 
 **Tier 2 — needs a judgement call**
 
-6. **Reconcile the 0.28 vs 0.227 m/s headline** (R6) — owner's decision.
-7. **Add `argparse` to the experiment scripts** so sweeps are configurable
-   without editing source.
-8. **Record run metadata** (git SHA, package versions, wall-clock) into each CSV.
-9. **Extract `go2_common.py`** for `07`, `08` and `harness.py` only (see §5).
+4. **Add `argparse` to `exp1/2/3`** so sweeps are configurable without editing
+   source. The Stage 3 scripts show the pattern.
+5. **Record run metadata** (git SHA, package versions, wall-clock) into each CSV.
+6. **Extract `go2_common.py`** for `07`, `08` and `harness.py` only (see §5).
+   Now safer to attempt: the drift guard and contract tests will catch mistakes.
 
 **Tier 3 — real research work**
 
-10. **Complete the gait × velocity grid.** Experiment 2 tested three gaits at a
-    single speed and found — surprisingly — that *pace* transfers better than
-    trot. `EXPERIMENT_FINDINGS.md` flags the single-speed limitation itself.
-    Filling the grid is 90 trials against an existing harness: a genuinely
-    publishable result reachable with code that already exists.
-11. **Stage 3 training.** The big one.
+7. **Complete the gait × velocity grid.** Experiment 2 tested three gaits at a
+   single speed and found — surprisingly — that *pace* transfers better than
+   trot. `EXPERIMENT_FINDINGS.md` flags the single-speed limitation itself.
+   Filling the grid is ~90 trials against an existing harness: a genuinely
+   publishable result reachable with code that already exists.
+8. **Train a Stage 3 policy on GPU.** The pipeline is complete and verified;
+   what is missing is compute.
+9. **Port the Stage 3 env to MJX.** Contained to `env/go2_env.py`.
 
-Start with #1 and #10. The first makes everything after it safer; the second is
-real research you can run tonight on a CPU.
+Start with #7 — it is real research you can run tonight on a CPU, and the
+harness for it already exists.
 
 ---
 

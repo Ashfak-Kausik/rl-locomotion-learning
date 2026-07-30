@@ -16,7 +16,7 @@ Two delivered stages plus a research layer:
 - `stage1-rl-fundamentals/` — PPO on CartPole / LunarLander / Pendulum (complete)
 - `stage2-go2-mujoco-inference/` — the Go2 inference pipeline (complete)
 - `stage2-go2-mujoco-inference/experiments/` — 3 studies, 75 trials (complete)
-- Stage 3 (custom training) is declared "in progress" but **no code exists yet**
+- `stage3-go2-training/` — training stack, complete and verified; needs GPU compute
 
 ---
 
@@ -39,8 +39,9 @@ History: 30 frames → 2100 dims.  Body input: 2100 + 2 latent = 2102.  Output: 
 ```
 
 **Never** reorder fields, change `OBS_SCALES`, or alter the history length.
-A wrong value fails **silently** — the robot just walks worse. There is no test
-that catches it.
+A wrong value fails **silently** in the simulator — the robot just walks worse.
+`tests/test_obs_contract.py` pins every field boundary and scale factor, so run
+`make test` after touching anything in this area.
 
 **Reference implementation: `experiments/harness.py`.**
 
@@ -110,9 +111,20 @@ stage2-go2-mujoco-inference/
     ├── harness.py    ← reference implementation; run_trial() is the core
     ├── exp1/2/3      ← thin sweeps over run_trial
     └── make_figures.py ← CSV → PNG; needs NO policy weights
+stage3-go2-training/
+├── networks.py       ← THE CONTRACT (70/2100/2102/12) + RMA architecture
+├── train.py          ← PPO phase 1 + adaptation distillation phase 2
+├── export.py         ← checkpoint → TorchScript in the Stage 2 contract
+├── evaluate.py       ← exported policy vs baseline, via Stage 2's harness
+└── env/              ← go2_env, rewards, curriculum, domain_rand
+tests/                ← 93 tests, none need policy weights
 scripts/check_env.py  ← 4-layer environment verifier
 docs/                 ← architecture, SRS, TDD, features, findings
 ```
+
+**Stage 3 must never redeclare the contract.** `env/go2_env.py` imports its
+constants from `harness.py`; `networks.assert_contract()` runs before any
+`.jit` is written. Tests enforce both.
 
 Environment variables (`paths.py`):
 `GO2_POLICY_DIR`, `GO2_SCENE`, `GO2_MODEL_PATH`, `GO2_SCENES_DIR`.
@@ -139,7 +151,9 @@ Run these and paste the output rather than asserting success.
 
 ```bash
 source .venv/bin/activate
+make test                                                      # 91 fast tests
 python scripts/check_env.py                                    # 4-layer report
+python stage3-go2-training/train.py --smoke                    # training E2E
 python -m py_compile stage2-go2-mujoco-inference/*.py           # syntax
 python stage2-go2-mujoco-inference/paths.py                     # path resolution
 python stage2-go2-mujoco-inference/experiments/make_figures.py  # full data path
@@ -167,8 +181,10 @@ Container equivalents in [`docs/DOCKER.md`](docs/DOCKER.md).
 - **Findings are numbered** (F1.1, F3.4) in
   `experiments/results/EXPERIMENT_FINDINGS.md` so later work can cite them.
   Append new sections; never overwrite.
-- **No test suite exists.** This is the highest-priority gap. Any refactor of
-  `harness.py` should add tests first.
+- **Run `make test` before and after any change.** 93 tests, ~3 s, no policy
+  weights needed. `tests/test_obs_contract.py` is the defence of the 70-dim
+  contract; `tests/test_constants.py` catches drift between the four files that
+  duplicate the control constants.
 
 ---
 
@@ -179,17 +195,20 @@ Container equivalents in [`docs/DOCKER.md`](docs/DOCKER.md).
 | R4 | `04_build_obs_vector.py` superseded, no warning in the file |
 | R5 | hip-index comment in `06_run_policy.py` names the legs in the wrong order (indices are right) |
 | R8 | `06_run_policy.py:240` says "30 seconds", code runs 60 |
-| R12 | root `README.md` truncated at "Repository Structure" |
-| — | README headline claims ~0.28 m/s; Exp 1 measured 0.227 ± 0.005 at the same command |
+
+Resolved: R1/R2 (hardcoded paths → `paths.py`), R3 (stray `turtle` import),
+R9-R12 (deps, `.gitignore`, README), the 0.28 vs 0.227 m/s discrepancy, and the
+missing test suite.
 
 ---
 
 ## Good first tasks
 
-1. **A test suite** (`tests/`, pytest, no policy weights needed) — highest value.
-2. **CI** running `check_env.py` + those tests.
-3. **Gait × velocity grid** — Exp 2 found pace beats trot at a *single* speed;
+1. **Gait × velocity grid** — Exp 2 found pace beats trot at a *single* speed;
    the findings log flags that limitation itself. ~90 trials, existing code.
+2. **Train a Stage 3 policy on GPU** — the pipeline is complete and verified;
+   what is missing is compute. See `stage3-go2-training/README.md`.
+3. **Port the Stage 3 env to MJX** — only `env/go2_env.py` is backend-specific.
 4. Banner `04_build_obs_vector.py` as superseded; fix R5 and R8.
 
 ---

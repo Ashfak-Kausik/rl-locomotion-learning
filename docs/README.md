@@ -43,6 +43,7 @@ without the policy weights.
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | System context, repo map, the full inference pipeline, the dual-rate control loop, the 70-dim observation layout, state/index conventions, the experiment subsystem — all with text diagrams. **The main document.** |
 | **[TECH-STACK-PRIMER.md](TECH-STACK-PRIMER.md)** | Python, NumPy, MuJoCo, MJCF, PyTorch/TorchScript, Gymnasium, Stable-Baselines3, TensorBoard, Matplotlib — taught through code from this repo. Ends with a gotcha table. |
 | **[FEATURES.md](FEATURES.md)** | Every capability, its status (✅ ⚠️ 🔄 📋 ❌), location and verification. |
+| **[`../stage3-go2-training/README.md`](../stage3-go2-training/README.md)** | The training stack: RMA two-phase design, curriculum derived from Experiment 3, domain randomisation, export contract, and an honest account of the compute required. |
 
 ### Building and running
 
@@ -90,6 +91,8 @@ make help                           # all convenience targets
 
 ```bash
 # Runs with NO policy weights
+make test                                  # 91 fast tests
+python stage3-go2-training/train.py --smoke   # 30 s end-to-end training check
 python stage1-rl-fundamentals/01_cartpole_ppo.py
 python stage2-go2-mujoco-inference/01_hello_go2.py
 python stage2-go2-mujoco-inference/experiments/make_figures.py
@@ -138,10 +141,11 @@ docker compose -f docker/compose.yaml run --rm headless <command>
 | 2 — Go2 inference in MuJoCo | ✅ complete, robot walks |
 | Research layer | ✅ 3 experiments, 75 trials, findings documented |
 | Infrastructure | ✅ deps, Docker, portable paths, docs |
-| 3 — Custom policy training | 🔄 declared in progress, **no code in tree** |
+| 3 — Custom policy training | ⚙️ full pipeline implemented + verified; needs GPU for a converged policy |
 | 4 — Vision-conditioned locomotion | 📋 planned |
 | 5 — ROS2 deployment | 📋 planned |
 | 6 — Sim-to-real | 🔮 hardware-dependent |
 
-**Biggest engineering gap:** no automated tests. See
-[REVERSE-ENGINEERING.md §9](REVERSE-ENGINEERING.md#9-suggested-first-contributions).
+**Test suite:** 93 tests, none requiring policy weights. `make test` runs them
+in ~3 s. They guard the 70-dim observation contract, cross-file constant drift,
+scene reproducibility and the Stage 3 → Stage 2 round-trip.

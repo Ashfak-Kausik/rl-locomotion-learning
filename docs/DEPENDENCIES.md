@@ -81,7 +81,7 @@ Tick these off and the whole pipeline runs.
 - [ ] `ffmpeg` — **only** for encoding demo GIFs
 - [ ] Docker + Compose v2 — **only** for Path B
 
-**Python** (all via `requirements.txt`)
+**Python** (all via `requirements.txt`, plus `requirements-dev.txt` for tests)
 - [ ] `numpy>=1.26,<3`
 - [ ] `mujoco>=3.2,<4`
 - [ ] `torch>=2.4,<3` (CPU build is enough and 12× smaller)
@@ -91,6 +91,7 @@ Tick these off and the whole pipeline runs.
 - [ ] `stable-baselines3>=2.4,<3`
 - [ ] `tensorboard>=2.16,<3`
 - [ ] `tqdm`, `rich`
+- [ ] `pytest>=8` (dev only — `pip install -r requirements-dev.txt`)
 
 **Assets**
 - [x] Unitree Go2 MJCF + 16 meshes — **vendored in-repo**, nothing to do
@@ -284,6 +285,9 @@ you from getting productive on day one.
 | `.../experiments/generate_terrain_scenes.py` | regenerate all 11 scenes |
 | `.../experiments/check_terrain_visual.py go2_stairs_08.xml` | inspect terrain |
 | `.../experiments/make_figures.py` | **all 4 data figures** from the CSVs |
+| `make test` | the full 93-test suite (~3 s) |
+| `python stage3-go2-training/train.py --smoke` | 30 s end-to-end training run |
+| `python stage3-go2-training/export.py --random` | contract-valid TorchScript export |
 
 That covers the entire RL curriculum, all MuJoCo fundamentals, the scene
 system, and the full figure pipeline.

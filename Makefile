@@ -11,15 +11,18 @@ PIP         := $(VENV)/bin/pip
 STAGE1      := stage1-rl-fundamentals
 STAGE2      := stage2-go2-mujoco-inference
 EXP         := $(STAGE2)/experiments
+STAGE3      := stage3-go2-training
+RUN         ?= v1
 COMPOSE     := docker compose -f docker/compose.yaml
 DOCKER_ENV  := UID=$(shell id -u) GID=$(shell id -g)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup check clean clean-all \
+.PHONY: help setup check test test-all clean clean-all \
+        train train-smoke export evaluate \
         figures scenes hello inspect pose walk teleop \
         cartpole lunarlander pendulum tensorboard \
         exp1 exp2 exp3 experiments \
-        docker-build docker-shell docker-check docker-figures docker-viewer \
+        export-random docker-build docker-shell docker-check docker-figures docker-viewer \
         compile lint-imports
 
 # --- meta --------------------------------------------------------------------
@@ -42,8 +45,15 @@ setup:  ## Install everything (native pkgs + venv + python deps), then verify
 check:  ## Verify the environment — 4-layer report [no-policy]
 	@$(PY) scripts/check_env.py 2>/dev/null || python3 scripts/check_env.py
 
+test:  ## Run the test suite, skipping slow tests [no-policy]
+	$(PY) -m pytest -m "not slow"
+
+test-all:  ## Run every test including the training smoke run [no-policy]
+	$(PY) -m pytest
+
 compile:  ## Syntax-check every Python file [no-policy]
-	@$(PY) -m py_compile $(STAGE1)/*.py $(STAGE2)/*.py $(EXP)/*.py scripts/*.py \
+	@$(PY) -m py_compile $(STAGE1)/*.py $(STAGE2)/*.py $(EXP)/*.py \
+	  $(STAGE3)/*.py $(STAGE3)/env/*.py scripts/*.py tests/*.py \
 	  && echo "all files compile"
 
 # --- Stage 2: no policy weights required -------------------------------------
@@ -83,6 +93,23 @@ exp3:  ## Experiment 3 — terrain robustness (10 x 5 trials)
 	cd $(EXP) && ../../$(PY) exp3_terrain.py
 
 experiments: exp1 exp2 exp3 figures  ## Run all three experiments, then figures
+
+# --- Stage 3: custom policy training [no-policy weights needed] ---------------
+
+train-smoke:  ## 30 s end-to-end training sanity check [no-policy]
+	cd $(STAGE3) && ../$(PY) train.py --smoke
+
+train:  ## Train a policy (long; see stage3-go2-training/README.md) [no-policy]
+	cd $(STAGE3) && ../$(PY) train.py --run-name $(RUN)
+
+export:  ## Export a checkpoint to TorchScript in the Stage 2 contract
+	$(PY) $(STAGE3)/export.py --checkpoint $(STAGE3)/runs/$(RUN)/checkpoint_final.pt
+
+export-random:  ## Export untrained but contract-valid nets (pipeline test) [no-policy]
+	$(PY) $(STAGE3)/export.py --random
+
+evaluate:  ## Compare an exported policy against the baseline via Stage 2's harness
+	$(PY) $(STAGE3)/evaluate.py --terrain
 
 # --- Stage 1 ------------------------------------------------------------------
 

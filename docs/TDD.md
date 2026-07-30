@@ -421,19 +421,24 @@ meant to be read standalone.
 `harness.py` only. Freeze `01`–`06` as curriculum. Full reasoning in
 [REVERSE-ENGINEERING.md §5](REVERSE-ENGINEERING.md#5-the-duplication-question).
 
-### 8.2 No test suite
+### 8.2 Test suite — RESOLVED
 
-The highest-priority gap. Cheap, high-value first tests, none of which need
-policy weights:
+93 tests, none requiring policy weights, running in ~3 s:
 
-```python
-def test_obs_shape():            # build_obs returns exactly (70,)
-def test_model_dimensions():     # go2_flat.xml gives nq=19, nv=18, nu=12
-def test_scene_regeneration():   # regenerated XMLs match committed ones
-def test_hip_indices():          # actuators 0,3,6,9 are the hip joints
-def test_quat_rotate_inverse():  # identity quaternion is a no-op
-def test_gait_presets():         # each preset yields distinct clock signals
-```
+| File | Guards |
+|---|---|
+| `test_obs_contract.py` | every field boundary, scale factor and gait preset in the 70-dim layout |
+| `test_model.py` | MJCF structure: 19/18/12, actuator order, torque motors, keyframe ≠ training pose |
+| `test_constants.py` | **cross-file drift** — parses `06`/`07`/`08`/`harness.py` with `ast` and fails if any duplicated constant diverges |
+| `test_scenes_and_paths.py` | byte-identical scene regeneration, env-var overrides, no machine-specific paths |
+| `test_stage3_contract.py` | Stage 3 → Stage 2 round-trip, curriculum, domain randomisation |
+
+The drift guard deserves note: the duplication in §8.1 is deliberate, so it
+cannot be eliminated — but it *can* be made safe. Parsing the constants out of
+each file and asserting equality converts a silent divergence into a red test.
+
+CI (`.github/workflows/ci.yml`) runs these on Python 3.10 and 3.12, plus the
+Docker image, plus reproducibility checks, on every push.
 
 ### 8.3 Hardcoded sweep parameters
 
@@ -459,6 +464,11 @@ A header banner costs nothing and prevents a real class of bug.
 The next major piece of work. Designing it against the existing seams keeps the
 whole Stage 2 measurement apparatus usable on day one.
 
+> **Implementation status:** §9 was a design sketch when first written. It is
+> now implemented in `stage3-go2-training/` — see its
+> [README](../stage3-go2-training/README.md). The interface discipline below is
+> what was actually built, and it is enforced by tests rather than convention.
+
 ### 9.1 Constraints
 
 - **Bursty GPU.** Free-tier sessions are time-limited and can be killed.
@@ -469,19 +479,41 @@ whole Stage 2 measurement apparatus usable on day one.
   steps not. That is a ready-made curriculum schedule, derived from measurement
   rather than guesswork.
 
-### 9.2 Proposed shape
+### 9.2 Shape as built
 
 ```
 stage3-go2-training/
+├── networks.py              THE CONTRACT + RMA architecture + assert_contract()
+├── config.py                hyperparameters and reward weights
 ├── env/
-│   ├── go2_env.py           MJX/mujoco_playground env, 70-dim obs contract
-│   ├── rewards.py           velocity tracking, gait regularity, energy, survival
-│   ├── curriculum.py        terrain schedule seeded by Exp 3 thresholds
-│   └── domain_rand.py       friction, mass, motor strength, latency
-├── train.py                 PPO loop, checkpoint every N steps
-├── export.py                trained policy -> TorchScript in the SAME contract
-└── configs/
+│   ├── go2_env.py           MuJoCo env; IMPORTS its constants from harness.py
+│   ├── rewards.py           12 terms
+│   ├── curriculum.py        7 levels seeded by Exp 3's measured thresholds
+│   └── domain_rand.py       8 parameters = the RMA privileged vector
+├── train.py                 PPO (phase 1) + distillation (phase 2), resumable
+├── export.py                checkpoint -> TorchScript, verified 4 ways
+└── evaluate.py              exported policy vs baseline, via Stage 2's harness
 ```
+
+Three decisions worth recording:
+
+**D11 — the env imports Stage 2's constants rather than copying them.**
+Copying would have made Stage 3 a fifth site of the duplication in §8.1, and
+the one place where drift would be *invisible* (a training/deployment mismatch
+shows up as "the policy trained fine but walks badly", the hardest bug class in
+this domain). Importing makes divergence impossible by construction.
+
+**D12 — export verifies before it writes.** `export.py` checks eager shapes,
+traced shapes, eager-vs-traced numerics, and a reload round-trip. Any failure
+aborts without writing. A silently wrong `.jit` would be discovered days later,
+mid-experiment.
+
+**D13 — the CPU backend is the reference; MJX is the scale-up.** Plain MuJoCo
+runs everywhere and is what the tests exercise, at ~600 policy steps/s with
+PPO updates. That is enough to validate the reward function and the export
+path end to end, and far too slow to converge a locomotion policy. Only
+`env/go2_env.py` is backend-specific, so the GPU port is contained to one
+file.
 
 ### 9.3 The critical interface
 

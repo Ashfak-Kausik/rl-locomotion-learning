@@ -24,6 +24,7 @@ gets lost in that translation.
 10. [The experiment subsystem](#10-the-experiment-subsystem)
 11. [Runtime & deployment topology](#11-runtime--deployment-topology)
 12. [Where the numbers live](#12-where-the-numbers-live)
+13. [Stage 3 closes the loop](#13-stage-3-closes-the-loop)
 
 ---
 
@@ -128,7 +129,7 @@ rl-locomotion-learning/
 │   ├── 08_view_scene.py             scene-selectable viewer for screenshots
 │   │
 │   ├── scenes/                      Self-contained MuJoCo worlds
-│   │   ├── go2_model/               vendored Unitree Go2 MJCF + 17 .obj meshes
+│   │   ├── go2_model/               vendored Unitree Go2 MJCF + 16 .obj meshes
 │   │   ├── go2_flat.xml             flat ground
 │   │   ├── go2_slope_{05..25}.xml   inclines 5/10/15/20/25°
 │   │   └── go2_stairs_{02..16}.xml  steps 2/5/8/12/16 cm
@@ -146,9 +147,29 @@ rl-locomotion-learning/
 │   │
 │   └── paper_figures/final_figures/ 11 curated PNGs for the write-up
 │
+├── stage3-go2-training/             ⚙️ COMPLETE pipeline — awaiting GPU compute
+│   ├── networks.py                  ★ THE CONTRACT + RMA architecture
+│   ├── config.py                    hyperparameters + reward weights
+│   ├── train.py                     PPO (phase 1) + distillation (phase 2)
+│   ├── export.py                    checkpoint → TorchScript, verified 4 ways
+│   ├── evaluate.py                  exported policy vs baseline, via harness
+│   └── env/
+│       ├── go2_env.py               emits the exact 70-dim observation
+│       ├── rewards.py               12 terms
+│       ├── curriculum.py            7 levels, seeded by Experiment 3
+│       └── domain_rand.py           8 params = the RMA privileged vector
+│
+├── tests/                           93 tests, none need policy weights
+│   ├── test_obs_contract.py         ★ defends the 70-dim layout
+│   ├── test_model.py                MJCF structure
+│   ├── test_constants.py            cross-file drift guard
+│   ├── test_scenes_and_paths.py     reproducibility + path resolution
+│   └── test_stage3_contract.py      Stage 3 → Stage 2 round-trip
+│
 ├── docs/                            ← this documentation set
 ├── scripts/                         ← setup_env.sh, check_env.py
 ├── docker/                          ← Dockerfile, compose.yaml, entrypoint.sh
+├── .github/workflows/ci.yml         ← tests, reproducibility, round-trip, Docker
 └── media/                           Demo GIFs used by the READMEs
 ```
 
@@ -621,8 +642,47 @@ is meant to be readable standalone) — change one, grep for the rest.
 
 ---
 
+## 13. Stage 3 closes the loop
+
+Stage 2 measured a baseline. Stage 3 trains a replacement — and the design rule
+that makes that worth doing is that **the new policy plugs into the old
+measurement apparatus unchanged**:
+
+```
+   stage3-go2-training/                     stage2-go2-mujoco-inference/
+   ┌────────────────────────┐               ┌──────────────────────────────┐
+   │ Go2Env                 │  imports its  │ harness.py                   │
+   │   build_obs ───────────┼──────────────►│   DEFAULT_JOINT_POS, KP/KD,  │
+   │   DECIMATION, KP, KD   │  constants    │   DECIMATION, build_obs, …   │
+   └───────────┬────────────┘   FROM ──────►└──────────────────────────────┘
+               │ trains                                    ▲
+               ▼                                           │
+   ┌────────────────────────┐                              │
+   │ export.py              │  body_latest.jit             │
+   │   assert_contract()    │─ adaptation_module_latest.jit┤
+   │   verify 4 ways        │                              │
+   └────────────────────────┘                              │
+                                    GO2_POLICY_DIR ────────┘
+                                    (paths.py resolves it)
+
+   Result: run_trial(), exp1/2/3 and make_figures.py all work on the new
+   policy with ZERO code changes — same scenes, same seeds, same metrics,
+   directly comparable against the walk-these-ways baseline.
+```
+
+Three mechanisms enforce this rather than merely documenting it:
+
+1. `env/go2_env.py` **imports** its constants from `harness.py` — it never
+   redeclares them, so drift is impossible by construction.
+2. `networks.assert_contract()` runs before `export.py` writes any file.
+3. `tests/test_stage3_contract.py` performs a real `run_trial()` round-trip on
+   an exported policy; CI runs it on every push.
+
+---
+
 ## Related reading
 
+- [`../stage3-go2-training/README.md`](../stage3-go2-training/README.md) — the training stack in detail
 - [TECH-STACK-PRIMER.md](TECH-STACK-PRIMER.md) — the languages, libraries and APIs used above
 - [REVERSE-ENGINEERING.md](REVERSE-ENGINEERING.md) — what is implemented, what is broken, what is next
 - [TDD.md](TDD.md) — component-level design decisions and rationale

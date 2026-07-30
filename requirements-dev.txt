@@ -1,0 +1,4 @@
+# Development / test dependencies.
+#   pip install -r requirements.txt -r requirements-dev.txt
+# Install the runtime requirements too — the tests import mujoco and torch.
+pytest>=8.0,<10

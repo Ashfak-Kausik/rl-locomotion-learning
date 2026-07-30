@@ -1,7 +1,9 @@
 # --- Python environments ----------------------------------------------------
-.venv/
-venv/
-env/
+# Anchored with a leading slash: an unanchored `env/` would also match
+# stage3-go2-training/env/, which is a source package, not a virtualenv.
+/.venv/
+/venv/
+/env/
 
 # --- Python bytecode --------------------------------------------------------
 __pycache__/
@@ -20,6 +22,11 @@ MUJOCO_LOG.TXT
 # See docs/DEPENDENCIES.md — keep policies/README.md, ignore the weights.
 policies/**
 !policies/README.md
+
+# --- Stage 3 training artefacts ---------------------------------------------
+# Checkpoints and exported policies are large and regenerable from train.py.
+stage3-go2-training/runs/
+/runs/
 
 # --- Editor / OS ------------------------------------------------------------
 .vscode/

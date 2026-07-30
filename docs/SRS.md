@@ -2,7 +2,7 @@
 
 **Project:** rl-locomotion-learning — Quadruped Locomotion via Reinforcement Learning
 **Version:** 1.0 (reverse-engineered from the implementation, 2026-07-30)
-**Status:** Stages 1–2 delivered; Stage 3 specified, not implemented
+**Status:** Stages 1–3 delivered (Stage 3 pipeline complete, awaiting GPU compute)
 
 > This SRS was written *after* the fact, by reading the code. Requirements
 > marked **✅** are implemented and verified. Requirements marked **📋** are
@@ -219,21 +219,28 @@ external input and produces measurements, figures and findings as output.
 
 ## 6. Functional requirements — future stages
 
-### 6.1 Stage 3 — custom policy training 📋
+### 6.1 Stage 3 — custom policy training
 
-| ID | Requirement |
-|---|---|
-| FR-4.1 | Define a Go2 locomotion environment in MJX or `mujoco_playground` |
-| FR-4.2 | Implement a reward function for velocity tracking and gait regularity |
-| FR-4.3 | Apply domain randomisation (friction, mass, motor strength, latency) |
-| FR-4.4 | Train PPO on free-tier GPU within a single session's time budget |
-| FR-4.5 | Checkpoint and resume across sessions |
-| FR-4.6 | Export to TorchScript in the **existing** 70-dim/2102-dim contract |
-| FR-4.7 | Evaluate the new policy with the **existing** harness, unmodified |
-| FR-4.8 | Support terrain curricula (motivated directly by Exp 3's findings) |
+| ID | Requirement | Status |
+|---|---|---|
+| FR-4.1 | Define a Go2 locomotion environment emitting the 70-dim contract | ✅ `env/go2_env.py` |
+| FR-4.2 | Implement a reward function for velocity tracking and gait regularity | ✅ 12 terms |
+| FR-4.3 | Apply domain randomisation (friction, mass, motor strength, latency) | ✅ 8 parameters |
+| FR-4.4 | Train PPO within a single session's time budget | ✅ implemented; CPU is slow (§7.1) |
+| FR-4.5 | Checkpoint and resume across sessions | ✅ optimiser + RNG + curriculum |
+| FR-4.6 | Export to TorchScript in the **existing** 70-dim/2102-dim contract | ✅ verified 4 ways |
+| FR-4.7 | Evaluate the new policy with the **existing** harness, unmodified | ✅ proven, CI-checked |
+| FR-4.8 | Support terrain curricula (motivated by Exp 3's findings) | ✅ 7 levels |
+| FR-4.9 | Implement RMA: privileged encoder (phase 1) + distillation (phase 2) | ✅ both phases |
+| FR-4.10 | Produce a **converged** policy that beats the baseline | 🔄 needs GPU compute |
+| FR-4.11 | MJX/GPU backend for the environment | 📋 designed, not ported |
 
-FR-4.6 and FR-4.7 are the critical ones: conforming to the existing contract
-means Stage 3 output is measurable by Stage 2 tooling on day one.
+FR-4.6 and FR-4.7 were the critical ones and are met: a Stage 3 export is
+loaded by `paths.load_policy()` and evaluated by `harness.run_trial()` with
+zero changes to Stage 2. Three mechanisms enforce this rather than documenting
+it — the env imports its constants from `harness.py`, `assert_contract()` runs
+before any `.jit` is written, and `tests/test_stage3_contract.py` exercises a
+real harness round-trip.
 
 ### 6.2 Stage 4 — vision-conditioned locomotion 📋
 
@@ -305,11 +312,12 @@ means Stage 3 output is measurable by Stage 2 tooling on day one.
 
 | ID | Requirement | Status |
 |---|---|---|
-| NFR-4.1 | Constants centralised or documented where duplicated | ⚠️ documented, still duplicated |
-| NFR-4.2 | Automated tests guard the observation contract | ❌ **no tests exist** |
-| NFR-4.3 | CI verifies the environment on every push | ❌ not implemented |
+| NFR-4.1 | Constants centralised or documented where duplicated | ⚠️ still duplicated in `06`–`08`, but drift is now a **test failure** (`tests/test_constants.py`) |
+| NFR-4.2 | Automated tests guard the observation contract | ✅ 93 tests; `tests/test_obs_contract.py` pins every field boundary |
+| NFR-4.3 | CI verifies the environment on every push | ✅ `.github/workflows/ci.yml`, py3.10 + 3.12 + Docker |
 | NFR-4.4 | Style enforced by a linter/formatter | ❌ not configured |
 | NFR-4.5 | Agentic coding tools have durable project context | ✅ `CLAUDE.md` |
+| NFR-4.6 | Tests runnable without the policy checkpoints | ✅ none of the 93 require them |
 
 ### 7.5 Portability
 
@@ -373,11 +381,16 @@ completed runs would corrupt the statistics.
 | FR-3.\* | 75 committed trial records; regeneration checks |
 | NFR-2.\* | scene regeneration `git diff` empty; figures re-rendered; container run |
 | NFR-3.\* | `check_env.py` executed on host and in container |
-| NFR-4.2–4.4 | **not verifiable — not implemented** |
+| FR-4.6–4.7 | Stage 3 export loaded by `paths.load_policy()` and run through `harness.run_trial()` |
+| FR-4.\* | `tests/test_stage3_contract.py`; `train.py --smoke`; export round-trip |
+| NFR-4.2–4.3 | `make test` (93 passing); CI on every push |
+| NFR-4.4 | **not verifiable — no linter configured** |
 
-**Verification gap:** there is no automated test suite. Every functional
-requirement above is verified by manual execution or by inspection. Closing
-NFR-4.2 is the highest-value engineering task in the backlog.
+**Verification status:** the observation contract, the model dimensions, the
+cross-file constants, scene reproducibility, path resolution and the Stage 3 →
+Stage 2 round-trip are now covered by automated tests that need no policy
+checkpoints. What remains manual is the *qualitative* claim that the robot
+walks well, which is inherently a judgement about a simulation.
 
 ---
 
@@ -389,7 +402,10 @@ NFR-4.2 is the highest-value engineering task in the backlog.
 | 2 | FR-2.1–2.30 | `stage2-go2-mujoco-inference/01-08` | walking robot, `media/stage2_walking.gif` |
 | Research | FR-3.1–3.14 | `experiments/` | `results/*.csv`, `EXPERIMENT_FINDINGS.md` |
 | Infra | NFR-2.5–2.8, 3.1–3.3, 5.\* | `scripts/`, `docker/`, `paths.py` | this branch |
-| 3 | FR-4.\* | — | not implemented |
+| 3 | FR-4.1–4.9 | `stage3-go2-training/` | smoke run + export round-trip + 40 tests |
+| 3 | FR-4.10–4.11 | — | blocked on GPU compute |
+| Tests | NFR-4.2, 4.6 | `tests/` | 93 passing |
+| CI | NFR-4.3 | `.github/workflows/ci.yml` | runs on push |
 | 4 | FR-5.\* | — | not implemented |
 | 5 | FR-6.\* | — | not implemented |
 | 6 | FR-7.\* | — | not implemented |
