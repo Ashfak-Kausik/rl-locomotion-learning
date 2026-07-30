@@ -8,18 +8,19 @@ This is the shared backbone for Experiments 1, 2, and 3.
 """
 
 import os
+import sys
 import numpy as np
 import torch
 import mujoco
 from collections import deque
 
+# Resolve paths via the shared, env-overridable module one level up.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import POLICY_DIR, require_policy  # noqa: E402
+
 # ============================================================================
 # CONSTANTS (must match the inference scripts exactly)
 # ============================================================================
-POLICY_DIR = (
-    "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/"
-    "gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
-)
 
 DEFAULT_JOINT_POS = np.array([
      0.1, 0.8, -1.5,   # FL
@@ -129,6 +130,8 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
     The policy nets can be passed in (to avoid reloading every trial).
     If None, they are loaded here.
     """
+    if body_net is None or adapt_net is None:
+        require_policy()  # actionable error instead of a bare "file not found"
     if body_net is None:
         body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
         body_net.eval()

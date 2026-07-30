@@ -1,5 +1,4 @@
 ## Let's load the CartPole policy and watch it in action!
-from turtle import done
 
 import gymnasium as gym
 from stable_baselines3 import PPO 

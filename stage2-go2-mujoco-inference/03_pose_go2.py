@@ -7,11 +7,15 @@ So ctrl = torque (Nm), not target angle. To hold a pose we must implement
 a PD controller manually — compute torque based on joint angle error every step.
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import MODEL_PATH  # env-overridable, see paths.py
+
 import mujoco
 import mujoco.viewer
 import time
 
-MODEL_PATH = "/home/user/projects/mujoco_menagerie/unitree_go2/scene.xml"
 model = mujoco.MjModel.from_xml_path(MODEL_PATH)
 data = mujoco.MjData(model)
 

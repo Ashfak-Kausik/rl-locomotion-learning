@@ -1,0 +1,39 @@
+# ============================================================================
+# rl-locomotion-learning — Python dependencies
+# ============================================================================
+# Install into a virtualenv, never system-wide:
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Or let the bootstrap script do it for you (recommended):
+#   ./scripts/setup_env.sh
+#
+# CPU-ONLY NOTE: this project is developed on CPU. The default PyPI `torch`
+# wheel on Linux bundles CUDA (~2.5 GB). For a ~200 MB CPU-only install:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+# `scripts/setup_env.sh` does this automatically unless you pass --cuda.
+# ============================================================================
+
+# --- Core numerics (both stages) --------------------------------------------
+numpy>=1.26,<3
+
+# --- Stage 2: physics simulation + policy inference -------------------------
+mujoco>=3.2,<4           # MJCF physics engine + passive viewer (GLFW window)
+torch>=2.4,<3            # TorchScript (.jit) policy inference only, no training
+
+# --- Stage 2: experiments, figures, screenshots -----------------------------
+matplotlib>=3.8,<4       # experiments/make_figures.py (Agg backend, headless)
+imageio>=2.34,<3         # 08_view_scene.py offscreen PNG capture
+
+# --- Stage 1: RL fundamentals (Gymnasium + PPO) -----------------------------
+# gymnasium[box2d] is required for LunarLander-v3. The box2d extra builds
+# a C++ extension: needs `swig` + `build-essential` + `python3-dev` on the
+# host (see docs/DEPENDENCIES.md).
+gymnasium[box2d]>=1.0,<2
+stable-baselines3>=2.4,<3
+tensorboard>=2.16,<3
+
+# --- Stage 1: SB3 `progress_bar=True` needs both of these -------------------
+tqdm>=4.66
+rich>=13.7

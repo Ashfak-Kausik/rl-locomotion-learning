@@ -1,0 +1,100 @@
+# =============================================================================
+# rl-locomotion-learning — container services
+# =============================================================================
+# Four services, all sharing one image, differing only in how they render:
+#
+#   lab        interactive shell, software rendering  (works anywhere)
+#   headless   one-shot command runner for experiments (no display at all)
+#   viewer     MuJoCo GUI forwarded to the host X server (Linux desktop)
+#   tensorboard  training-curve UI on http://localhost:6006
+#
+# Usage:
+#   docker compose -f docker/compose.yaml build
+#   docker compose -f docker/compose.yaml run --rm lab
+#   docker compose -f docker/compose.yaml run --rm headless \
+#       python stage2-go2-mujoco-inference/experiments/make_figures.py
+#   xhost +local:docker && docker compose -f docker/compose.yaml run --rm viewer
+# =============================================================================
+
+x-common: &common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+    args:
+      # Match the host user so files written into the bind mount are not
+      # owned by root. Override with UID=$(id -u) GID=$(id -g) if needed.
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  image: rl-locomotion-learning:cpu
+  working_dir: /workspace
+  volumes:
+    # The repo itself — code edits on the host apply instantly in-container.
+    - ../:/workspace
+    # Policy checkpoints live OUTSIDE the repo (large binaries, not committed).
+    # Point GO2_POLICY_SRC at wherever you keep them; defaults to ../policies.
+    - ${GO2_POLICY_SRC:-../policies}:/workspace/policies:ro
+  environment:
+    GO2_POLICY_DIR: /workspace/policies/walk-these-ways-go2
+    PYTHONPATH: /workspace
+  # MuJoCo parallelises across cores; give the container the whole box by
+  # default but cap memory so a runaway experiment cannot OOM the host.
+  mem_limit: ${RLL_MEM_LIMIT:-8g}
+
+services:
+
+  # --- interactive shell, software rendering -------------------------------
+  lab:
+    <<: *common
+    container_name: rll-lab
+    environment:
+      GO2_POLICY_DIR: /workspace/policies/walk-these-ways-go2
+      PYTHONPATH: /workspace
+      MUJOCO_GL: osmesa
+      MPLBACKEND: Agg
+    stdin_open: true
+    tty: true
+    command: bash
+
+  # --- batch experiment runner, no display ---------------------------------
+  headless:
+    <<: *common
+    container_name: rll-headless
+    environment:
+      GO2_POLICY_DIR: /workspace/policies/walk-these-ways-go2
+      PYTHONPATH: /workspace
+      MUJOCO_GL: osmesa
+      MPLBACKEND: Agg
+      RLL_QUIET: "1"
+    command: python scripts/check_env.py
+
+  # --- MuJoCo GUI via host X server (Linux) --------------------------------
+  # Run `xhost +local:docker` on the host first, once per login session.
+  # On Wayland this still works through XWayland.
+  viewer:
+    <<: *common
+    container_name: rll-viewer
+    environment:
+      GO2_POLICY_DIR: /workspace/policies/walk-these-ways-go2
+      PYTHONPATH: /workspace
+      MUJOCO_GL: glfw
+      DISPLAY: ${DISPLAY:-:0}
+      QT_X11_NO_MITSHM: "1"
+    volumes:
+      - ../:/workspace
+      - ${GO2_POLICY_SRC:-../policies}:/workspace/policies:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    stdin_open: true
+    tty: true
+    command: python stage2-go2-mujoco-inference/01_hello_go2.py
+
+  # --- training curves ------------------------------------------------------
+  tensorboard:
+    <<: *common
+    container_name: rll-tensorboard
+    environment:
+      RLL_QUIET: "1"
+    ports:
+      - "${TB_PORT:-6006}:6006"
+    command: >
+      tensorboard --logdir /workspace/stage1-rl-fundamentals/tb_logs
+                  --host 0.0.0.0 --port 6006

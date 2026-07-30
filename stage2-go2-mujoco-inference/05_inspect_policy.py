@@ -4,9 +4,13 @@ Goal: Confirm body expects 2102 dims (2100 history + 2 from adaptation module)
       and adaptation module expects 2100 dims (30 timesteps x 70 obs).
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import POLICY_DIR  # env-overridable, see paths.py
+
 import torch
 
-POLICY_DIR = "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
 
 body = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
 adaptation = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")

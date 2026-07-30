@@ -3,12 +3,16 @@ Stage 2.1: Loading the Go2 model in MuJoco and opening a viewer window
 Goal: Let's see the Go2 robot in the MuJoCo sim environment.
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import MODEL_PATH  # env-overridable, see paths.py
+
 import mujoco
 import mujoco.viewer
 import time
 
 # Path to the Go2 scene XML file from the MuJoCo Menagerie.
-MODEL_PATH = "/home/user/projects/mujoco_menagerie/unitree_go2/scene.xml"
 
 # Load the model (This parses the XML file and builds the physics model in memory).
 model = mujoco.MjModel.from_xml_path(MODEL_PATH)

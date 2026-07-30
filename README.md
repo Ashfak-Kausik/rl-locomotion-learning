@@ -66,7 +66,7 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 | Timesteps | 25,000 |
 | Compute | ~2 min, CPU |
 
-![CartPole](media/cartpole_demo.gif) <!-- TODO -->
+![CartPole](media/stage1_cartpole.gif)
 
 **LunarLander-v3 — shaped-reward control**
 
@@ -77,7 +77,7 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 | Timesteps | 300,000 |
 | Compute | ~15 min, CPU |
 
-![LunarLander](media/lunarlander_demo.gif) <!-- TODO -->
+![LunarLander](media/stage1_lunarlander.gif)
 
 **Pendulum-v1 — continuous control**
 
@@ -88,7 +88,7 @@ Implementation and analysis of Proximal Policy Optimization (PPO) on standard Gy
 | Timesteps | 400,000 |
 | Compute | ~10 min, CPU |
 
-![Pendulum](media/pendulum_demo.gif) <!-- TODO -->
+![Pendulum](media/stage1_pendulum.gif)
 
 ---
 
@@ -136,3 +136,65 @@ Full inference pipeline from MuJoCo state → 70-dim observation vector → adap
 ---
 
 ## Repository Structure
+
+```
+rl-locomotion-learning/
+├── reinforcement-learning-theories/   8 chapters: RL foundations → PPO →
+│                                      legged locomotion → this project
+├── stage1-rl-fundamentals/            PPO on CartPole / LunarLander / Pendulum
+│   └── 01-06_*.py                     odd = train + save, even = load + watch
+│
+├── stage2-go2-mujoco-inference/       The core of the project
+│   ├── paths.py                       env-overridable path resolution
+│   ├── 01-08_*.py                     numbered curriculum; 06 = the robot walks
+│   ├── scenes/                        self-contained Go2 MJCF + 11 terrain worlds
+│   ├── experiments/                   harness + 3 studies + figure pipeline
+│   │   ├── harness.py                 headless run_trial() — the shared backbone
+│   │   ├── exp1/exp2/exp3_*.py        velocity, gait, terrain sweeps
+│   │   └── results/                   CSVs + EXPERIMENT_FINDINGS.md
+│   └── paper_figures/                 curated figures for the write-up
+│
+├── docs/                              architecture, SRS, TDD, features, setup
+├── scripts/                           setup_env.sh, check_env.py
+├── docker/                            Dockerfile + 4 compose services
+├── policies/                          walk-these-ways checkpoints (not committed)
+└── media/                             demo GIFs
+```
+
+---
+
+## Getting Started
+
+```bash
+git clone <repo> && cd rl-locomotion-learning
+./scripts/setup_env.sh          # detects your OS, installs everything, verifies
+source .venv/bin/activate
+make help                       # see every available target
+```
+
+Or run it containerised, with no host dependencies beyond Docker:
+
+```bash
+docker compose -f docker/compose.yaml build
+docker compose -f docker/compose.yaml run --rm lab
+```
+
+> **Note on the policy weights.** The pretrained `walk-these-ways` checkpoints
+> are a large external *input* to this project and are not committed. Stage 2
+> inference needs them; see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md#6-the-one-dependency-we-cannot-install).
+> Everything else — all of Stage 1, Stage 2 scripts 01–04, scene generation, and
+> the complete figure pipeline — runs without them.
+
+### Documentation
+
+| Document | Read when |
+|---|---|
+| [docs/README.md](docs/README.md) | starting out — includes a day-one reading order |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | you want the system view, with diagrams |
+| [docs/TECH-STACK-PRIMER.md](docs/TECH-STACK-PRIMER.md) | MuJoCo / PyTorch / Gymnasium are new to you |
+| [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | setting up, or something will not install |
+| [docs/DOCKER.md](docs/DOCKER.md) | running in a container |
+| [docs/SRS.md](docs/SRS.md) · [docs/TDD.md](docs/TDD.md) | requirements and design rationale |
+| [docs/FEATURES.md](docs/FEATURES.md) | what is implemented vs planned |
+| [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) | known issues and good first tasks |
+| [docs/AGENTIC-WORKFLOW.md](docs/AGENTIC-WORKFLOW.md) | working on this repo with AI coding tools |

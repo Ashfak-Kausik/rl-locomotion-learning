@@ -22,6 +22,11 @@ KEY MAPPING (active while viewer window is focused):
     R                 Reset robot pose
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import MODEL_PATH, POLICY_DIR  # env-overridable, see paths.py
+
 import mujoco
 import mujoco.viewer
 import numpy as np
@@ -32,11 +37,6 @@ from collections import deque
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-MODEL_PATH = "/home/user/projects/mujoco_menagerie/unitree_go2/scene.xml"
-POLICY_DIR = (
-    "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/"
-    "gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
-)
 
 # Joint defaults from walk-these-ways training config (signs verified)
 DEFAULT_JOINT_POS = np.array([

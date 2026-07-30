@@ -3,9 +3,13 @@ Stage 2.2: Inspect the Go2 model structure.
 Goal: Understand what bodies, joints, actuators, and sensors exist in the Go2 model and how they are organized.
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import MODEL_PATH  # env-overridable, see paths.py
+
 import mujoco
 
-MODEL_PATH = "/home/user/projects/mujoco_menagerie/unitree_go2/scene.xml"
 model = mujoco.MjModel.from_xml_path(MODEL_PATH)
 data = mujoco.MjData(model)
 

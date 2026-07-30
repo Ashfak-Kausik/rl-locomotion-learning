@@ -27,6 +27,11 @@ PNGs are saved to the current working directory by MuJoCo.
 Quit: Ctrl+C in the terminal, or close the viewer window.
 """
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from paths import POLICY_DIR  # env-overridable, see paths.py
+
 import sys
 import os
 import time
@@ -62,10 +67,6 @@ if not os.path.exists(SCENE_PATH):
 # ----------------------------------------------------------------------------
 # Constants (identical to harness / script 07)
 # ----------------------------------------------------------------------------
-POLICY_DIR = (
-    "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/"
-    "gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
-)
 DEFAULT_JOINT_POS = np.array([
      0.1, 0.8, -1.5,  -0.1, 0.8, -1.5,
      0.1, 1.0, -1.5,  -0.1, 1.0, -1.5,

@@ -1,13 +1,27 @@
+# --- Python environments ----------------------------------------------------
 .venv/
+venv/
+env/
 
-tb_logs/
-*.zip
+# --- Python bytecode --------------------------------------------------------
 __pycache__/
 *.pyc
-.vscode/
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# --- Training artefacts -----------------------------------------------------
+tb_logs/
+*.zip                    # SB3 model checkpoints (ppo_cartpole.zip, etc.)
 MUJOCO_LOG.TXT
-*.zip
-tb_logs/
-*.zip
-tb_logs/
-__pycache__/
+
+# --- Large external model checkpoints ---------------------------------------
+# The walk-these-ways policy is an INPUT to this project, not an output.
+# See docs/DEPENDENCIES.md — keep policies/README.md, ignore the weights.
+policies/**
+!policies/README.md
+
+# --- Editor / OS ------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
