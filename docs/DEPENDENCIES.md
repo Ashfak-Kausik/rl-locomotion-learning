@@ -345,7 +345,9 @@ It never installs native packages without asking, unless you pass `--yes`.
 | `Error opening file '.../base_0.obj'` | relative path to `from_xml_path` | pass an absolute path |
 | `GLFWError: X11: The DISPLAY environment variable is missing` | headless machine | `export MUJOCO_GL=osmesa` |
 | Viewer opens black / crashes | GLFW or GL driver missing | install `libglfw3 libgl1` |
-| `GLX: Failed to create context: BadValue` | GPU driver/library mismatch — usually an NVIDIA update with no reboot since | reboot. Immediate workaround: `LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa python …` (software rendering, slower but correct) |
+| `GLX: Failed to create context: BadValue` | GPU driver/library mismatch — usually an NVIDIA update with no reboot since | reboot. Diagnose precisely with `make gpu`. Immediate workaround: `LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa python …` (software rendering, slower but correct) |
+| `torch.cuda.is_available()` is False with a CUDA build | same driver mismatch, or a CPU-only wheel | `make gpu` says which |
+| `MUJOCO_GL=egl` is no faster than `osmesa` | EGL silently fell back to software (`libEGL: driver (null)`) | same driver mismatch; `make gpu` detects it |
 | `Image width N > framebuffer width 640` | MuJoCo's offscreen framebuffer defaults to 640×480 | set `model.vis.global_.offwidth/offheight` before constructing `mujoco.Renderer` |
 | `nvidia-smi: Driver/library version mismatch` | driver updated without reboot | reboot — or ignore, Stages 1–2 are CPU-only |
 | `python3 -m venv` fails | venv split into its own package | `sudo apt install python3-venv` |

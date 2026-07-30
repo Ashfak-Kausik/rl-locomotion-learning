@@ -189,6 +189,36 @@ access. So:
 - **For a converged policy, port the env to MJX** (see below). The interface is
   deliberately contained so the swap touches one file.
 
+### Using your local GPU
+
+The trainer picks its device automatically and says so:
+
+```bash
+make gpu                                    # is the GPU usable at all?
+python train.py --run-name v1               # --device auto is the default
+python train.py --run-name v1 --device cuda # insist, and warn loudly if not
+```
+
+`config.resolve_device()` never falls back silently — asking for `cuda` and
+getting `cpu` without noticing is how you discover three hours later that the
+run is 40x slower than expected. When a GPU is found, `tune_for_device()`
+rescales the PPO update, because the bottleneck moves:
+
+| | CPU | GPU |
+|---|---|---|
+| bottleneck | MuJoCo stepping | kernel-launch overhead |
+| `num_envs` | 8 | 32 |
+| `minibatch_size` | 128 | 2048 |
+| TF32 matmuls | n/a | enabled (Ampere+) |
+
+A local consumer GPU helps the PPO update, not the simulation — MuJoCo still
+steps on CPU here. Expect a useful speedup, not a transformative one. The
+transformative change is MJX, below, which moves the *physics* onto the GPU.
+
+**Rendering:** `MUJOCO_GL=egl` gives GPU offscreen rendering with no X server.
+Worth knowing: EGL returns valid frames at software speed when it cannot load
+the driver, so verify with `make gpu` rather than assuming.
+
 ### The MJX/GPU path
 
 `env/go2_env.py` is the only backend-specific file. Everything else — the

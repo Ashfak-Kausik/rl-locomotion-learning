@@ -17,12 +17,12 @@ COMPOSE     := docker compose -f docker/compose.yaml
 DOCKER_ENV  := UID=$(shell id -u) GID=$(shell id -g)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup check test test-all clean clean-all \
+.PHONY: help setup check gpu gpu-bench test test-all clean clean-all \
         train train-smoke export evaluate \
         figures scenes hello inspect pose walk teleop \
         cartpole lunarlander pendulum tensorboard \
         exp1 exp2 exp3 experiments \
-        export-random docker-build docker-shell docker-check docker-figures docker-viewer \
+        export-random train-gpu docker-build docker-shell docker-check docker-figures docker-viewer \
         compile lint-imports
 
 # --- meta --------------------------------------------------------------------
@@ -44,6 +44,15 @@ setup:  ## Install everything (native pkgs + venv + python deps), then verify
 
 check:  ## Verify the environment — 4-layer report [no-policy]
 	@$(PY) scripts/check_env.py 2>/dev/null || python3 scripts/check_env.py
+
+gpu:  ## Check whether the GPU is usable (run after a reboot) [no-policy]
+	@$(PY) scripts/gpu_check.py
+
+gpu-bench:  ## GPU readiness plus GPU-vs-CPU benchmarks [no-policy]
+	@$(PY) scripts/gpu_check.py --bench
+
+train-gpu:  ## Train Stage 3 on the GPU (needs `make gpu` to pass first)
+	cd $(STAGE3) && ../$(PY) train.py --run-name $(RUN) --device cuda
 
 test:  ## Run the test suite, skipping slow tests [no-policy]
 	$(PY) -m pytest -m "not slow"

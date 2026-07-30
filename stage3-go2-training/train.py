@@ -39,7 +39,7 @@ import torch.nn as nn
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import Config              # noqa: E402
+from config import Config, resolve_device, tune_for_device  # noqa: E402
 from env import Curriculum, Go2Env     # noqa: E402
 from networks import (                 # noqa: E402
     ACTION_DIM,
@@ -111,7 +111,10 @@ class RolloutBuffer:
 class Trainer:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.device = torch.device(cfg.device)
+        # Resolve "auto" to a real device, say why, and scale the PPO update
+        # to match it. Never silently falls back to a 40x slower run.
+        self.device = resolve_device(cfg.device)
+        tune_for_device(cfg, self.device)
         torch.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
@@ -462,7 +465,9 @@ def main():
     ap.add_argument("--timesteps", type=int, default=None)
     ap.add_argument("--num-envs", type=int, default=None)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
+    ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
+                    help="auto (default) uses the GPU if one is usable, "
+                         "and says so either way")
     ap.add_argument("--resume", default=None, metavar="CHECKPOINT.pt")
     ap.add_argument("--no-curriculum", action="store_true",
                     help="pin level 0 — use when debugging the reward function")
@@ -496,10 +501,9 @@ def main():
         cfg.save_every_updates = 5
         print("SMOKE MODE — tiny budgets, verifies the pipeline end to end.\n")
 
-    if args.device == "cuda" and not torch.cuda.is_available():
-        print("warning: --device cuda requested but no GPU visible; using CPU")
-        cfg.device = "cpu"
-
+    # Device resolution and the CPU-fallback warning are handled by
+    # resolve_device() inside Trainer.__init__, which also diagnoses *why*
+    # a GPU was unavailable and scales the PPO update to the device.
     print(cfg.describe())
     trainer = Trainer(cfg)
     if args.resume:

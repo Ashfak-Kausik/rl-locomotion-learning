@@ -87,6 +87,37 @@ services:
     tty: true
     command: python stage2-go2-mujoco-inference/01_hello_go2.py
 
+  # --- GPU training ---------------------------------------------------------
+  # Requires the NVIDIA Container Toolkit on the host:
+  #   sudo apt install nvidia-container-toolkit
+  #   sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+  # Verify with: docker compose -f docker/compose.yaml run --rm gpu nvidia-smi
+  #
+  # NOTE: this uses the SAME image as the other services, which ships CPU-only
+  # torch. Either rebuild with `--build-arg TORCH_INDEX=cu130`, or pip install
+  # the CUDA wheel inside the container. Kept deliberately separate so the
+  # default image stays ~3 GB rather than ~7 GB.
+  gpu:
+    <<: *common
+    container_name: rll-gpu
+    environment:
+      GO2_POLICY_DIR: /workspace/policies/walk-these-ways-go2
+      PYTHONPATH: /workspace
+      MUJOCO_GL: egl          # GPU offscreen rendering, no X server
+      MPLBACKEND: Agg
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,graphics,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    stdin_open: true
+    tty: true
+    command: bash
+
   # --- training curves ------------------------------------------------------
   tensorboard:
     <<: *common

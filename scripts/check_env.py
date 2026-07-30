@@ -21,11 +21,13 @@ Usage:
 """
 
 import argparse
+import glob
 import importlib
 import importlib.metadata as md
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -194,27 +196,86 @@ def check_system():
                "not installed — needed only for the container workflow",
                required=False)
 
-    # GPU — genuinely optional. This project is CPU-only by design; a GPU
-    # matters only for Stage 3 (MJX / mujoco_playground training).
-    if shutil.which("nvidia-smi"):
-        r = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,driver_version",
-             "--format=csv,noheader"],
-            capture_output=True, text=True,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            record("system", "nvidia gpu", "ok", r.stdout.strip(),
-                   required=False)
-        else:
-            record("system", "nvidia gpu", "warn",
-                   "nvidia-smi present but failing "
-                   f"({(r.stderr or r.stdout).strip().splitlines()[0] if (r.stderr or r.stdout).strip() else 'unknown'})"
-                   " — driver/library mismatch usually needs a reboot. "
-                   "Not required: Stages 1-2 are CPU-only.",
-                   required=False)
-    else:
-        record("system", "nvidia gpu", "info",
+    check_nvidia(layer)
+
+
+def _nvidia_versions():
+    """
+    Return (loaded_kernel_module_version, userspace_library_version).
+
+    These being different is THE cause of "Failed to initialize NVML:
+    Driver/library version mismatch": apt swapped the userspace libraries
+    while the old kernel module stayed resident, because it cannot be
+    unloaded while the display server is using it.
+    """
+    loaded = None
+    try:
+        # The NVRM line is free-form and differs between driver flavours:
+        #   "... Open Kernel Module for x86_64  580.159.03  Release Build"
+        #   "... x86_64 Kernel Module  550.120  Fri ..."
+        # so pull the first dotted version out of the line rather than
+        # anchoring on the words around it.
+        for line in Path("/proc/driver/nvidia/version").read_text().splitlines():
+            if "NVRM" not in line:
+                continue
+            m = re.search(r"(\d+\.\d+(?:\.\d+)?)", line)
+            if m:
+                loaded = m.group(1)
+            break
+    except Exception:
+        pass
+
+    userspace = None
+    for pattern in ("/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.*",
+                    "/usr/lib64/libnvidia-ml.so.*"):
+        for path in glob.glob(pattern):
+            m = re.search(r"libnvidia-ml\.so\.(\d[\d.]+)$", path)
+            if m:
+                userspace = m.group(1)
+                break
+        if userspace:
+            break
+
+    return loaded, userspace
+
+
+def check_nvidia(layer):
+    """
+    GPU is genuinely optional — Stages 1-2 are CPU-only by design. It matters
+    for Stage 3 training. When it IS broken, say precisely how.
+    """
+    if not shutil.which("nvidia-smi"):
+        record(layer, "nvidia gpu", "info",
                "none detected — fine, Stages 1-2 are CPU-only", required=False)
+        return
+
+    probe = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name,driver_version,memory.total",
+         "--format=csv,noheader"],
+        capture_output=True, text=True,
+    )
+    if probe.returncode == 0 and probe.stdout.strip():
+        record(layer, "nvidia gpu", "ok",
+               probe.stdout.strip().replace("\n", " | "), required=False)
+        return
+
+    # Failing. Work out whether it is the classic version mismatch.
+    loaded, userspace = _nvidia_versions()
+    if loaded and userspace and loaded != userspace:
+        record(layer, "nvidia gpu", "warn",
+               f"DRIVER/LIBRARY MISMATCH — running kernel module {loaded}, "
+               f"userspace libraries {userspace}. The driver was upgraded "
+               "while the machine was running; the old module cannot unload "
+               "because the display server is using it. "
+               "FIX: reboot. Nothing to install. "
+               "(Stages 1-2 are CPU-only and unaffected.)",
+               required=False)
+    else:
+        err = (probe.stderr or probe.stdout).strip().splitlines()
+        record(layer, "nvidia gpu", "warn",
+               f"nvidia-smi failing ({err[0] if err else 'unknown'}). "
+               "Stages 1-2 are CPU-only and unaffected.",
+               required=False)
 
 
 # ============================================================================
@@ -347,8 +408,53 @@ def check_runtime():
     # Does the GL stack work? Only matters for viewer/rendering scripts.
     gl = os.environ.get("MUJOCO_GL", "(unset — defaults to glfw)")
     record(layer, "MUJOCO_GL backend", "info",
-           f"{gl}  [set MUJOCO_GL=osmesa or egl for headless rendering]",
+           f"{gl}  [osmesa = CPU/portable, egl = GPU/fast, glfw = window]",
            required=False)
+
+    # Offscreen rendering, per backend. Each is spawned in a subprocess
+    # because a failed GL init can abort the whole interpreter, and because
+    # MUJOCO_GL is read once at mujoco import time.
+    scene = (REPO_ROOT / "stage2-go2-mujoco-inference" / "scenes"
+             / "go2_flat.xml")
+    probe = (
+        "import os, mujoco;"
+        f"m=mujoco.MjModel.from_xml_path(r'{scene}');"
+        "m.vis.global_.offwidth=320; m.vis.global_.offheight=240;"
+        "d=mujoco.MjData(m); mujoco.mj_forward(m,d);"
+        "r=mujoco.Renderer(m,height=240,width=320); r.update_scene(d);"
+        "f=r.render(); r.close();"
+        "print('OK', f.shape)"
+    )
+    for backend, why in (
+        ("osmesa", "CPU software rendering — always available, slower"),
+        ("egl", "GPU offscreen rendering — needs a working driver"),
+    ):
+        env = {**os.environ, "MUJOCO_GL": backend}
+        result = subprocess.run([sys.executable, "-c", probe],
+                                capture_output=True, text=True, env=env,
+                                timeout=120)
+        if result.returncode == 0 and "OK" in result.stdout:
+            # EGL can "succeed" while silently falling back to software when
+            # the NVIDIA driver cannot be loaded — you get a valid frame at
+            # llvmpipe speed and no error. The tell is in stderr.
+            stderr = result.stderr or ""
+            fell_back = ("failed to create dri2 screen" in stderr
+                         or "driver (null)" in stderr)
+            if backend == "egl" and fell_back:
+                record(layer, f"offscreen render: {backend}", "warn",
+                       "renders, but SILENTLY FELL BACK TO SOFTWARE — the GPU "
+                       "driver could not be loaded (libEGL: 'driver (null)'). "
+                       "No speed benefit over osmesa until the driver is "
+                       "fixed; see the nvidia gpu check above.",
+                       required=False)
+            else:
+                record(layer, f"offscreen render: {backend}", "ok", why,
+                       required=False)
+        else:
+            tail = (result.stderr or result.stdout).strip().splitlines()
+            record(layer, f"offscreen render: {backend}", "warn",
+                   f"{why} — unavailable ({tail[-1][:90] if tail else '?'})",
+                   required=False)
 
     # Gymnasium: CartPole is pure-Python; LunarLander needs the Box2D build.
     for env_id, required in (("CartPole-v1", True), ("LunarLander-v3", False)):
