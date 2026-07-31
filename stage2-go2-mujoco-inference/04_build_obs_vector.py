@@ -1,8 +1,15 @@
 """
-Stage 2.4: Building the policy's observation vector by hand. 
-Goal: Let's understand what the policy actually "sees" - extract each piece from MuJoCo state, scale it, and assemble a single 70-dim vector. 
+Stage 2.4: Building the policy's observation vector by hand.
+Goal: Let's understand what the policy actually "sees" - extract each piece from MuJoCo state, scale it, and assemble a single 70-dim vector.
 
 We won't run a policy yet. Just constructing one and inspecting the obs.
+
+*** SUPERSEDED — kept as a learning artefact, do not copy from this file. ***
+This was written before the true observation layout was recovered, and it
+disagrees with the working code in field order, clock position, and hip
+signs (see docs/REVERSE-ENGINEERING.md R4). The Stage 2 README's "key
+debugging insights" are exactly the two mistakes preserved below.
+`experiments/harness.py` is the reference implementation — copy from there.
 """
 
 import os as _os
@@ -121,7 +128,7 @@ def build_obs(model, data, commands, prev_action, prev_prev_action, gait_phase_t
     # The action the policy output last step. Helps the policy be temporally coherent - it can "remember" what it just did.
     action_obs = prev_action.copy()
 
-    # ===[42:54] clock signals ===
+    # ===[42:46] clock signals === (this file's own layout — WRONG vs. harness.py, see the module banner)
     # Two phase signals split into front/reaer or diagonal pairs.
     # For trot; feet move in diagonal pairs. Phase shifted by 0.5 between pairs. 
     # Encoded as sin/cos so the network sees a continuous presentation of the gait cycle.

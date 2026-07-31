@@ -107,7 +107,7 @@ any container without tkinter. **Fix:** removed.
 
 These are **not bugs**, but each one will mislead a newcomer.
 
-### R4 — `04_build_obs_vector.py` contains a superseded, incorrect layout
+### R4 — `04_build_obs_vector.py` contains a superseded, incorrect layout (fixed)
 
 The file is a preserved learning artefact from *before* the observation layout
 was recovered correctly, and it disagrees with the working code in two ways:
@@ -123,10 +123,13 @@ Both errors are exactly the ones the Stage 2 README lists as "key debugging
 insights", so the file is genuinely valuable *as history*. It is dangerous only
 if you copy from it.
 
-**Recommendation:** keep the file, add a header banner marking it superseded.
-`harness.py` is the reference implementation.
+**Fix applied:** header banner added marking the file superseded, pointing to
+`harness.py` as the reference implementation. Also fixed the `[42:54]`
+comment (R8) to `[42:46]`, matching the file's own (wrong) concatenation —
+the file's content is deliberately left otherwise unchanged, it's the
+history that's valuable.
 
-### R5 — A misleading comment about hip indices
+### R5 — A misleading comment about hip indices (fixed)
 
 `06_run_policy.py`:
 
@@ -134,10 +137,11 @@ if you copy from it.
 # Hip-scale-reduction mask (FR_hip, FL_hip, RR_hip, RL_hip are indices 0,3,6,9 ...)
 ```
 
-The **indices are right**; the **names are in the wrong order**. Verified
+The **indices were right**; the **names were in the wrong order**. Verified
 against `scenes/go2_model/go2.xml` lines 189–200, the actuator order is
 `FL, FR, RL, RR`, so indices 0/3/6/9 are `FL_hip, FR_hip, RL_hip, RR_hip`.
-Comment-only defect — the mask itself is correct.
+Comment-only defect — the mask itself was always correct. **Fixed** by
+correcting the leg names in the comment to match.
 
 ### R6 — MuJoCo silently needs absolute scene paths
 
@@ -187,11 +191,14 @@ rendering a real 1920x1080 frame. Pinned by
 **Worth generalising:** a test suite that only exercises importable code would
 never have caught this. Running the thing found it in minutes.
 
-### R8 — Stale comments
+### R8 — Stale comments (fixed)
 
-- `06_run_policy.py:240` — `# run for 30 seconds` above `< 60`.
-- `04_build_obs_vector.py` — index comments (`[42:54] clock`) do not match the
-  concatenation beneath them.
+- `06_run_policy.py:243` — `# run for 30 seconds` above `< 60`. Fixed to say
+  60.
+- `04_build_obs_vector.py` — index comment said `[42:54] clock` but the
+  concatenation beneath it places a 4-element clock at 42, i.e. `[42:46]`.
+  Fixed to match (still labeled wrong-vs-harness via the R4 banner — only the
+  arithmetic was corrected).
 
 Cosmetic, but they are exactly what a newcomer trusts.
 

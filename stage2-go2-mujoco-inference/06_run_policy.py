@@ -225,7 +225,7 @@ current_joint_pos = DEFAULT_JOINT_POS.copy()     # track current joint positions
 gait_phase_t = 0.0                               # tracks the current phase of the gait cycle, from 0 to 1.
 GAIT_FREQ = COMMANDS[4]                          # step frequency in Hz (from commands) 
 
-# Hip-scale-reduction mask (FR_hip, FL_hip, RR_hip, RL_hip are indices 0, 3, 6, 9 in the action vector)
+# Hip-scale-reduction mask (FL_hip, FR_hip, RL_hip, RR_hip are indices 0, 3, 6, 9 in the action vector)
 action_scale_per_joint = np.full(12, ACTION_SCALE)
 for hip_idx in [0, 3, 6, 9]:
     action_scale_per_joint[hip_idx] *= HIP_SCALE_REDUCTION
@@ -240,7 +240,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
     start_time = time.time()
     t_last_print = 0.0 
 
-    while viewer.is_running() and time.time() - start_time < 60:      # run for 30 seconds or until window is closed.
+    while viewer.is_running() and time.time() - start_time < 60:      # run for 60 seconds or until window is closed.
         step_start = time.time()
 
         # Policy step every DECIMATION sim steps
