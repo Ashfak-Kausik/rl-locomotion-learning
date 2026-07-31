@@ -55,6 +55,42 @@ CAVEAT: `run_trial`-style rollouts here are deterministic -- no
 initial-condition randomisation -- so each number above is a single sample
 on one committed obstacle layout. Treat the defaults as tuned-on-one-course,
 not as validated across layouts.
+
+WHEN NOT TO USE THIS: SPEED BEATS RECOVERY
+------------------------------------------
+Everything above assumes the default trot at cmd_vx=0.5. Measured on
+go2_obstacles_hard over 60 s, changing GAIT matters far more than recovery
+does, and at speed recovery becomes a net cost:
+
+    gait   cmd_vx  recovery | distance   speed
+    trot     0.5     off    |   5.02 m   0.08 m/s   <- the original failure
+    trot     0.5     on     |  13.00 m   0.22 m/s   <- this module
+    bound    1.5     on     |  38.24 m   0.64 m/s
+    bound    1.5     off    |  42.95 m   0.72 m/s   <- fastest
+
+`bound` at 1.5 m/s covers the whole field (last box at x=13.44) and keeps
+going, needing only 1 recovery versus trot's 4. Moving fast enough, it
+pushes past obstacles rather than wedging on them, and the backup/turn
+manoeuvres just waste time -- hence recovery OFF being 4.7 m better.
+
+So: use recovery for slow, careful traversal; use `--gait bound --cmd-vx
+1.5` when speed is what you want. They are alternatives, not complements.
+
+BUT bound at 1.5 FALLS on go2_gauntlet (fell=True, both with and without
+recovery, ~2.3 m in). The stairs section needs the slower, more careful
+trot. Fast is not universally better -- it is better on scattered
+obstacles, worse on steps.
+
+ON JUMPING: it does not. Airborne fraction (all four feet clear of any
+contact, measured off MuJoCo's real contact list) is 0.0% for every gait,
+every speed, and every footswing_height from 0.06 to 0.20 on flat and
+obstacle terrain. Peak body height 0.30-0.32 m against a 0.27 m nominal is
+gait bob, not flight. The only non-zero airborne reading is 11.8% on
+go2_gauntlet with bound@1.5 -- and that run falls, so it is tumbling down
+the stairs, not jumping over anything. The 70-dim contract has no jump
+command; a real jump needs a policy trained for it (see the Stage 3 README's
+notes on AMP and the MetalHead dataset, which includes jump reference
+clips).
 """
 
 import numpy as np
