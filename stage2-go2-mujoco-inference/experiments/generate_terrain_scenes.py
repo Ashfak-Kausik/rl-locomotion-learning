@@ -182,6 +182,83 @@ def make_obstacle_scene(difficulty, n_obstacles, size_range, seed=0):
     return name, xml
 
 
+def make_gauntlet_scene(seed=0):
+    """
+    The hard course: stairs, THEN a dense obstacle field, back to back.
+
+    Every other terrain scene isolates one failure mode (a slope, OR steps,
+    OR scattered obstacles) so Experiment 3's attribution stays clean. This
+    one deliberately does not isolate anything -- it chains a stair section
+    (Exp 3's worst failure mode: baseline safe-stalls at >=5cm, F3.4) directly
+    into a dense obstacle field (denser and larger than obstacles-hard), so a
+    policy has to recover its gait immediately after climbing before the
+    obstacles start. That transition is where a controller tuned on isolated
+    terrain types is most likely to break.
+    """
+    n_steps, step_h_cm, tread, width = 5, 5, 0.30, 2.0
+    step_h = step_h_cm / 100.0
+    flat_len, flat_cx = 2.5, 0.25
+    x_stair_start = 1.5
+
+    body = [
+        '    <!-- Flat run-up -->',
+        '    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"/>',
+        f'    <geom name="runup" type="box" pos="{flat_cx} 0 -0.05" '
+        f'size="{flat_len/2:.4f} 2.0 0.05" material="groundplane"/>',
+        f'    <!-- Stairs: {n_steps} steps, {step_h_cm} cm rise '
+        f'(baseline safe-stalls at this height, Exp3 F3.4) -->',
+    ]
+    for i in range(n_steps):
+        top_z = (i + 1) * step_h
+        x0 = x_stair_start + i * tread
+        cx, cz = x0 + tread / 2.0, top_z / 2.0
+        body.append(
+            f'    <geom name="step_{i}" type="box" '
+            f'pos="{cx:.4f} 0 {cz:.4f}" '
+            f'size="{tread/2:.4f} {width/2:.4f} {top_z/2:.6f}" '
+            f'material="stepmat"/>'
+        )
+
+    # Landing at the top of the stairs, then the obstacle field. The plateau
+    # sits at top_z (the last step's height); obstacle base positions are
+    # given relative to plateau height so boxes sit ON the landing.
+    plateau_z = n_steps * step_h
+    x_landing_end = x_stair_start + n_steps * tread
+    body.append(
+        f'    <!-- Landing -->\n'
+        f'    <geom name="landing" type="box" '
+        f'pos="{x_landing_end + 6.0:.4f} 0 {plateau_z - 0.05:.4f}" '
+        f'size="6.5 {width/2:.4f} 0.05" material="groundplane"/>'
+    )
+
+    rng = np.random.default_rng(seed)
+    corridor_start = x_landing_end + 1.0
+    corridor_len, half_width, min_spacing = 10.0, 1.6, 0.4
+    n_obstacles, size_range = 30, (0.15, 0.40)
+    placed = []
+    attempts = 0
+    while len(placed) < n_obstacles and attempts < n_obstacles * 50:
+        attempts += 1
+        x = rng.uniform(corridor_start, corridor_start + corridor_len)
+        y = rng.uniform(-half_width, half_width)
+        if any(abs(x - px) < min_spacing and abs(y - py) < min_spacing
+               for px, py, _, _, _ in placed):
+            continue
+        sx, sy = rng.uniform(*size_range), rng.uniform(*size_range)
+        placed.append((x, y, sx, sy, rng.uniform(0.5, 1.0)))
+
+    for i, (x, y, sx, sy, hfac) in enumerate(placed):
+        h = max(sx, sy) * hfac
+        body.append(
+            f'    <geom name="obs_{i}" type="box" '
+            f'pos="{x:.4f} {y:.4f} {plateau_z + h/2:.4f}" '
+            f'size="{sx/2:.4f} {sy/2:.4f} {h/2:.4f}" material="stepmat"/>'
+        )
+
+    xml = HEADER.format(model_name="go2 gauntlet") + "\n".join(body) + "\n" + FOOTER
+    return "go2_gauntlet.xml", xml
+
+
 def main():
     os.makedirs(SCENES_DIR, exist_ok=True)
 
@@ -215,6 +292,12 @@ def main():
         with open(path, "w") as f:
             f.write(xml)
         written.append(name)
+
+    name, xml = make_gauntlet_scene()
+    path = os.path.join(SCENES_DIR, name)
+    with open(path, "w") as f:
+        f.write(xml)
+    written.append(name)
 
     print(f"Wrote {len(written)} terrain scenes to {SCENES_DIR}:")
     for n in written:

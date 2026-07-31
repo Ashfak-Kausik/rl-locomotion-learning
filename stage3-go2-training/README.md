@@ -138,8 +138,9 @@ Not guesswork — the measured points at which the flat-trained baseline breaks:
 | 5 `stairs-5` | 5 cm | **safe stall**: 0.47 m, never climbs |
 | 6 `slope-20` | 20° | 0% survival |
 | 7 `stairs-8` | 8 cm | far beyond baseline |
-| 8 `obstacles-easy` | 12 scattered boxes, 10–20 cm | not evaluated in Exp 1–3 (feature didn't exist) |
-| 9 `obstacles-hard` | 24 scattered boxes, 15–35 cm | not evaluated |
+| 8 `obstacles-easy` | 12 scattered boxes, 10–20 cm | baseline handles it: 7.53m in 25s, height never drops (verified) |
+| 9 `obstacles-hard` | 24 scattered boxes, 15–35 cm | not yet evaluated |
+| 10 `gauntlet` | 5cm stairs into a 30-obstacle field | baseline safe-stalls at the first step: 1.34m in 25s (verified, same failure mode as F3.4) |
 
 Levels 0–3 reproduce or exceed the baseline's flat-ground competence (`flat-run`
 asks for genuine running speed, not just a longer fast-trot). **Level 4
@@ -400,8 +401,47 @@ correctly, and exports a contract-valid policy at the end.
   ([Robot Parkour Learning](https://arxiv.org/pdf/2309.05665),
   [Humanoid Parkour Learning](https://arxiv.org/pdf/2406.10759)) uses depth
   input specifically because proprioception-only obstacle avoidance (what
-  `obstacles-easy/hard` above give you) is a fundamentally harder,
+  `obstacles-easy/hard/gauntlet` above give you) is a fundamentally harder,
   reactive-only problem — worth reading before assuming vision is optional.
+
+### Motion datasets, for making it move like a real dog
+
+"Walk like a real dog" is what AMP (Adversarial Motion Priors) is *for* — a
+discriminator scores the policy's motion against real reference clips, so
+gait naturalness becomes part of the reward instead of something hand-tuned
+reward terms only approximate. This repo's `env/rewards.py` does not do
+this; it's twelve hand-written terms, the same family walk-these-ways itself
+used. Adding AMP is a real project, not a config flag: a discriminator
+network, a motion-matching observation window, retargeting whichever dataset
+below onto the Go2's joint layout, and a reward term that blends the
+discriminator score with the existing tracking terms. Datasets found, in
+order of how directly they answer "real dog":
+
+- **[Tencent-RoboticsX/lifelike-agility-and-play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play)** —
+  actual Labrador retriever motion capture (`.bvh`), plus the same clips
+  already retargeted to a quadruped robot's joint layout (`data/mocap_data`).
+  This is the one directly labeled "real dog." **License is `NOASSERTION`
+  on GitHub** — check before any commercial use, and re-verify current terms
+  before integrating; not resolved by this session.
+- **[inspirai/MetalHead](https://github.com/inspirai/MetalHead)** — not a
+  real dog, but real AMP-ready reference clips for a robot (Unitree A1):
+  gallop_forward, jump, trot_forward, turn. Lower retargeting effort than
+  the Labrador data since it's already robot-joint data, at the cost of
+  being animal-*inspired* rather than animal-*recorded*.
+- **[Kine2Go](https://arxiv.org/abs/2606.14433)** (arXiv, 2026-06) — 800+
+  Go2-specific kinematic trajectories from 40 distinct trained policies, not
+  animal mocap at all. Useful as a "what does good Go2 locomotion look like"
+  reference set rather than a naturalness target; no confirmed public
+  download link found, only the paper.
+- **Truebones Zoo** — 1,038 clips across 70 skeletons including quadrupeds,
+  frequently cited in animal-mocap literature. Distributed as a paid Unity
+  asset in the versions found; treat as license-restricted, not a free
+  drop-in.
+
+None of these are wired into this repo. Retargeting mocap onto the Go2's
+specific 12-DOF layout and alternating hip signs (see `CLAUDE.md`'s hard
+invariants) is itself nontrivial work, independent of which dataset is
+chosen.
 
 ---
 

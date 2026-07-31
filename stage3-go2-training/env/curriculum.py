@@ -64,7 +64,11 @@ LEVELS = [
           "step over, blind (no perception input, proprioception only)"),
     Level("obstacles-hard", "go2_obstacles_hard.xml", (0.0, 0.75),
           (-0.3, 0.3), (-0.4, 0.4),
-          "24 boxes 15-35cm, denser field — the hardest level"),
+          "24 boxes 15-35cm, denser field"),
+    Level("gauntlet", "go2_gauntlet.xml", (0.0, 0.75), (-0.3, 0.3), (-0.4, 0.4),
+          "5cm stairs directly into a 30-obstacle field, no recovery gap — "
+          "the walk-these-ways baseline safe-stalls at the very first step "
+          "(verified: 1.34m in 25s, height never drops). The hardest level."),
 ]
 
 # Index of the first level the flat-trained baseline cannot clear. Beating this

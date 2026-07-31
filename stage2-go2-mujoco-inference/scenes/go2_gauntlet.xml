@@ -1,0 +1,64 @@
+<mujoco model="go2 gauntlet">
+  <include file="go2_model/go2.xml"/>
+  <statistic center="0 0 0.1" extent="0.8"/>
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-130" elevation="-20"/>
+  </visual>
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0"
+             width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+             markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true"
+              texrepeat="5 5" reflectance="0.2"/>
+    <material name="rampmat" rgba="0.45 0.45 0.55 1"/>
+    <material name="stepmat" rgba="0.5 0.42 0.38 1"/>
+  </asset>
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <!-- Flat run-up -->
+    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"/>
+    <geom name="runup" type="box" pos="0.25 0 -0.05" size="1.2500 2.0 0.05" material="groundplane"/>
+    <!-- Stairs: 5 steps, 5 cm rise (baseline safe-stalls at this height, Exp3 F3.4) -->
+    <geom name="step_0" type="box" pos="1.6500 0 0.0250" size="0.1500 1.0000 0.025000" material="stepmat"/>
+    <geom name="step_1" type="box" pos="1.9500 0 0.0500" size="0.1500 1.0000 0.050000" material="stepmat"/>
+    <geom name="step_2" type="box" pos="2.2500 0 0.0750" size="0.1500 1.0000 0.075000" material="stepmat"/>
+    <geom name="step_3" type="box" pos="2.5500 0 0.1000" size="0.1500 1.0000 0.100000" material="stepmat"/>
+    <geom name="step_4" type="box" pos="2.8500 0 0.1250" size="0.1500 1.0000 0.125000" material="stepmat"/>
+    <!-- Landing -->
+    <geom name="landing" type="box" pos="9.0000 0 0.2000" size="6.5 1.0000 0.05" material="groundplane"/>
+    <geom name="obs_0" type="box" pos="10.3696 -0.7367 0.3226" size="0.0801 0.0771 0.0726" material="stepmat"/>
+    <geom name="obs_1" type="box" pos="13.1276 0.3412 0.4108" size="0.1662 0.1430 0.1608" material="stepmat"/>
+    <geom name="obs_2" type="box" pos="12.1585 -1.5912 0.4076" size="0.1822 0.0792 0.1576" material="stepmat"/>
+    <geom name="obs_3" type="box" pos="5.7566 1.1622 0.3515" size="0.1427 0.1125 0.1015" material="stepmat"/>
+    <geom name="obs_4" type="box" pos="4.2832 -1.2023 0.3783" size="0.1588 0.1559 0.1283" material="stepmat"/>
+    <geom name="obs_5" type="box" pos="7.8368 1.5911 0.4131" size="0.1976 0.1607 0.1631" material="stepmat"/>
+    <geom name="obs_6" type="box" pos="10.8845 -0.3555 0.3760" size="0.0919 0.1652 0.1260" material="stepmat"/>
+    <geom name="obs_7" type="box" pos="7.1024 -0.0453 0.3802" size="0.1862 0.1918 0.1302" material="stepmat"/>
+    <geom name="obs_8" type="box" pos="9.7153 -0.5700 0.3539" size="0.1493 0.1172 0.1039" material="stepmat"/>
+    <geom name="obs_9" type="box" pos="12.9027 -0.8731 0.3901" size="0.1529 0.0855 0.1401" material="stepmat"/>
+    <geom name="obs_10" type="box" pos="11.8710 -0.8340 0.3733" size="0.1846 0.0823 0.1233" material="stepmat"/>
+    <geom name="obs_11" type="box" pos="5.5028 -0.1589 0.3418" size="0.1745 0.1038 0.0918" material="stepmat"/>
+    <geom name="obs_12" type="box" pos="8.0455 -0.9648 0.3458" size="0.0863 0.1475 0.0958" material="stepmat"/>
+    <geom name="obs_13" type="box" pos="13.4211 -0.4316 0.3980" size="0.0882 0.1536 0.1480" material="stepmat"/>
+    <geom name="obs_14" type="box" pos="8.4038 1.4547 0.3614" size="0.1375 0.1282 0.1114" material="stepmat"/>
+    <geom name="obs_15" type="box" pos="13.9510 1.4366 0.3771" size="0.1325 0.1697 0.1271" material="stepmat"/>
+    <geom name="obs_16" type="box" pos="9.2931 0.9145 0.3927" size="0.1268 0.1668 0.1427" material="stepmat"/>
+    <geom name="obs_17" type="box" pos="13.3206 -1.2322 0.4379" size="0.1661 0.1909 0.1879" material="stepmat"/>
+    <geom name="obs_18" type="box" pos="4.1471 1.1636 0.3635" size="0.1976 0.1947 0.1135" material="stepmat"/>
+    <geom name="obs_19" type="box" pos="12.2237 -0.0640 0.4185" size="0.1040 0.1752 0.1685" material="stepmat"/>
+    <geom name="obs_20" type="box" pos="6.6613 0.1246 0.3496" size="0.1303 0.1914 0.0996" material="stepmat"/>
+    <geom name="obs_21" type="box" pos="11.3201 0.3660 0.3338" size="0.0785 0.1649 0.0838" material="stepmat"/>
+    <geom name="obs_22" type="box" pos="13.6606 0.1991 0.3514" size="0.1074 0.1052 0.1014" material="stepmat"/>
+    <geom name="obs_23" type="box" pos="6.2587 -1.2014 0.3652" size="0.1110 0.1483 0.1152" material="stepmat"/>
+    <geom name="obs_24" type="box" pos="12.1812 0.4048 0.4013" size="0.1949 0.1212 0.1513" material="stepmat"/>
+    <geom name="obs_25" type="box" pos="9.9392 1.1145 0.3701" size="0.0932 0.1258 0.1201" material="stepmat"/>
+    <geom name="obs_26" type="box" pos="4.0995 -0.4319 0.3497" size="0.0848 0.1566 0.0997" material="stepmat"/>
+    <geom name="obs_27" type="box" pos="11.0265 1.4202 0.3470" size="0.0909 0.1831 0.0970" material="stepmat"/>
+    <geom name="obs_28" type="box" pos="7.8077 -0.2247 0.4250" size="0.1361 0.1971 0.1750" material="stepmat"/>
+    <geom name="obs_29" type="box" pos="7.0886 -0.7365 0.3899" size="0.1829 0.1852 0.1399" material="stepmat"/>
+  </worldbody>
+</mujoco>
