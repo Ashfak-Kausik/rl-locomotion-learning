@@ -394,11 +394,16 @@ def test_training_smoke_run_completes():
     Run train.py --smoke as a subprocess: both RMA phases, checkpointing and
     the final contract check. Catches import errors, shape bugs and optimiser
     misconfiguration that unit tests miss.
+
+    Deliberately run from the REPO ROOT, not from STAGE3. A relative out_dir
+    resolved against the CWD would scatter checkpoints into ./runs, where
+    export.py's documented command cannot find them; the assertion below only
+    means something because the CWD is somewhere else.
     """
     result = subprocess.run(
         [sys.executable, str(STAGE3 / "train.py"), "--smoke",
          "--run-name", "pytest_smoke"],
-        capture_output=True, text=True, cwd=str(STAGE3), timeout=900,
+        capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=900,
     )
     assert result.returncode == 0, (
         f"smoke training failed:\nSTDOUT:\n{result.stdout[-3000:]}\n"

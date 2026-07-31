@@ -212,12 +212,30 @@ rescales the PPO update, because the bottleneck moves:
 | TF32 matmuls | n/a | enabled (Ampere+) |
 
 A local consumer GPU helps the PPO update, not the simulation — MuJoCo still
-steps on CPU here. Expect a useful speedup, not a transformative one. The
-transformative change is MJX, below, which moves the *physics* onto the GPU.
+steps on CPU here. Measured on an RTX 3050 (8 GB, sm_86):
 
-**Rendering:** `MUJOCO_GL=egl` gives GPU offscreen rendering with no X server.
-Worth knowing: EGL returns valid frames at software speed when it cannot load
-the driver, so verify with `make gpu` rather than assuming.
+| | CPU | GPU | speedup |
+|---|---|---|---|
+| training throughput | ~600 sps | ~1,050 sps | 1.8x |
+| 4096³ matmul (the PPO update) | 198 ms | 28 ms | 7.1x |
+| 1280x720 offscreen render | 6.6 fps (osmesa) | 309 fps (egl) | 47x |
+
+Note the shape of that: **rendering and raw matmul gain far more than training
+does**, because training is still gated by sequential MuJoCo stepping on CPU.
+Expect a useful speedup, not a transformative one. The transformative change is
+MJX, below, which moves the *physics* onto the GPU.
+
+**Rendering:** `MUJOCO_GL=egl` gives GPU offscreen rendering with no X server,
+and is where the GPU pays off most — 47x here, which is the difference between
+a video-producing experiment sweep taking minutes and taking an hour. Worth
+knowing: EGL returns valid frames at *software* speed when it cannot load the
+driver, and raises nothing. The 6.6-vs-309 fps gap above was invisible until
+`gpu_check.py` started inspecting stderr for `driver (null)`. Verify with
+`make gpu` rather than assuming.
+
+Checkpoints land in `stage3-go2-training/runs/<run-name>/` regardless of which
+directory you launch from — a relative `out_dir` is anchored to the stage
+directory, not the shell's CWD.
 
 ### The MJX/GPU path
 

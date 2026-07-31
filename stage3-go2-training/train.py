@@ -118,7 +118,14 @@ class Trainer:
         torch.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
-        self.run_dir = Path(cfg.out_dir) / cfg.run_name
+        # A relative out_dir is anchored to this stage directory, not to the
+        # shell's CWD — otherwise `python stage3-go2-training/train.py` from
+        # the repo root scatters checkpoints where export.py will not find
+        # them. Matches how export.py anchors its policies/ default.
+        out_dir = Path(cfg.out_dir)
+        if not out_dir.is_absolute():
+            out_dir = Path(__file__).resolve().parent / out_dir
+        self.run_dir = out_dir / cfg.run_name
         self.run_dir.mkdir(parents=True, exist_ok=True)
 
         self.curriculum = Curriculum(
