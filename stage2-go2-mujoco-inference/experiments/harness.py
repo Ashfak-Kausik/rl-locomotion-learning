@@ -92,6 +92,13 @@ def tilt_angle_deg(quat):
     return np.degrees(np.arccos(cos_a))
 
 
+def yaw_deg(quat):
+    """Heading (degrees) about the world vertical. 0 = facing +x."""
+    w, x, y, z = quat
+    return np.degrees(np.arctan2(2.0 * (w * z + x * y),
+                                 1.0 - 2.0 * (y * y + z * z)))
+
+
 def build_obs(data, commands_vec, gait_params, prev_action, last_action, gait_phase_t):
     base_quat = data.qpos[3:7]
     proj_grav = quat_rotate_inverse(base_quat, np.array([0.0, 0.0, -1.0]))
@@ -196,6 +203,7 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
 
     # Logging buffers (only during measurement window)
     vx_log, vy_log, h_log = [], [], []
+    vx_body_log, vy_body_log, yaw_log = [], [], []
     fell = False
     fall_time = None
 
@@ -237,6 +245,19 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
             vx_log.append(data.qvel[0])
             vy_log.append(data.qvel[1])
             h_log.append(data.qpos[2])
+            # The command the policy receives is BODY-frame (see build_obs),
+            # but qvel[0:2] above is WORLD-frame. With ang_vel_yaw commanded
+            # at 0 and no heading feedback, the robot slowly curves, so the
+            # world-frame projection under-reports its true forward speed by
+            # cos(yaw). Log the body-frame velocity too, so tracking error
+            # can be evaluated in the same frame it was commanded in.
+            # Both are kept: mean_vx/mean_vy stay world-frame so every
+            # committed CSV remains reproducible from this source.
+            v_body = quat_rotate_inverse(data.qpos[3:7].copy(),
+                                         data.qvel[0:3].copy())
+            vx_body_log.append(v_body[0])
+            vy_body_log.append(v_body[1])
+            yaw_log.append(yaw_deg(data.qpos[3:7]))
 
     # Compute metrics
     if fell:
@@ -251,6 +272,9 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
             "lateral_drift": None,
             "height_mean": None, "height_std": None,
             "distance_traveled": None,
+            # null, not 0 — a fallen trial has no meaningful velocity.
+            "mean_vx_body": None, "mean_vy_body": None,
+            "vel_track_err_body": None, "yaw_drift_deg": None,
         }
 
     vx_arr = np.array(vx_log)
@@ -271,6 +295,16 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
         "height_mean": round(float(h_arr.mean()), 4),
         "height_std": round(float(h_arr.std()), 4),
         "distance_traveled": round(float(dist), 4) if dist is not None else None,
+        # Body-frame companions to the four world-frame metrics above. The
+        # policy is commanded in the body frame, so these are the ones that
+        # measure tracking rather than tracking-plus-heading-drift. See
+        # EXPERIMENT_FINDINGS.md F4.1. Added after the CSVs above were
+        # collected, hence separate keys rather than changed semantics.
+        "mean_vx_body": round(float(np.array(vx_body_log).mean()), 4),
+        "mean_vy_body": round(float(np.array(vy_body_log).mean()), 4),
+        "vel_track_err_body": round(
+            float(abs(lin_vel_x - np.array(vx_body_log).mean())), 4),
+        "yaw_drift_deg": round(float(yaw_log[-1] - yaw_log[0]), 2),
     }
 
 

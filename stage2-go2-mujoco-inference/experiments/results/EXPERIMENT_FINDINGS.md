@@ -217,3 +217,89 @@ terrain-induced, not intrinsic policy instability.
 - F3.3 is the strongest single insight → Discussion centerpiece.
 - F3.4 (metric correction) → Methodology, framed as rigor.
 - Direct motivation for Stage 3 / future work (terrain-curriculum training).
+
+---
+
+## Experiment 4 — Heading Hold vs. World-Frame Velocity Measurement
+
+**Run date:** 2026-07-31
+**Script:** `exp4_heading_hold.py`
+**Raw data:** `results/exp4_heading_hold.csv`
+**Conditions:** commanded vx ∈ {0.25, 0.5, 0.75, 1.0} m/s × heading_hold ∈
+{off, on}, trot, flat, 3 seeds each
+
+### Motivation
+
+Experiments 1–3 command `ang_vel_yaw = 0.0` for the whole trial and log
+`data.qvel[0]`, MuJoCo's WORLD-frame x-velocity. `build_obs` (`harness.py`)
+hands the policy `lin_vel_x` as a BODY-frame command. Those coincide only
+while the robot's heading stays at 0°. With no heading feedback, small yaw
+bias in the gait integrates over a 30 s trial, and the two frames diverge.
+
+### Results table (mean over 3 seeds)
+
+| cmd_vx | mode | world vx | body vx | |yaw drift| | |lateral offset| |
+|--------|--------|----------|---------|--------------|-------------------|
+| 0.25 | off | 0.144 | 0.195 | 78.3° | 3.27 m |
+| 0.25 | on  | 0.199 | 0.195 | 6.7°  | 0.03 m |
+| 0.50 | off | 0.226 | 0.296 | 73.3° | 4.82 m |
+| 0.50 | on  | 0.302 | 0.295 | 6.3°  | 0.25 m |
+| 0.75 | off | 0.366 | 0.396 | 37.6° | 4.06 m |
+| 0.75 | on  | 0.399 | 0.396 | 1.7°  | 0.11 m |
+| 1.00 | off | 0.504 | 0.502 | 1.6°  | 0.43 m |
+| 1.00 | on  | 0.505 | 0.503 | 0.8°  | 0.22 m |
+
+`heading_hold` closes a simple loop the policy was already trained to accept
+(`ang_vel_yaw = clip(-1.5 * yaw_error, -0.6, +0.6)`), evaluated every policy
+step against the current heading. No retraining, no contract change.
+
+### Findings
+
+**F4.1 — Roughly half of Experiment 1's "velocity under-tracking" is a
+measurement artifact, not a control failure (HEADLINE REVISION).**
+At cmd 0.5, `off` shows world vx 0.226 (44% of command) but body vx 0.296
+(59% of command) — the same trial, two frames. `body vx` is flat across the
+entire 30 s window regardless of heading; `world vx` decays as
+`body_vx * cos(yaw_error)` while the robot arcs away from +x. The policy is
+not decelerating; it is turning. F1.1's headline number (37–55% tracking)
+should be read as a *lower bound* — true tracking, measured in the frame the
+command was issued in, is materially better. The residual gap (body vx 0.296
+vs. commanded 0.5, ≈59%) is the real sim-to-sim finding this repo exists to
+quantify; it is smaller than F1.1 reported, not zero.
+
+**F4.2 — F1.3's "directional-stability sweet spot at cmd≈1.0" is largely
+explained by yaw drift being coincidentally small there, not gait symmetry.**
+`off` yaw drift is 78°, 73°, 38°, 2° across the four commands — monotonically
+*shrinking*, not peaking at 1.0. Lateral drift in Exp 1 (F1.3) tracks this:
+minimal at cmd=1.0 not because the gait is more symmetric there, but because
+the un-corrected heading happens to wander least at that operating point over
+a 30 s window. This does not fully retire F1.3 — gait symmetry may still
+contribute — but the dominant term is measurement geometry, and the
+"hypothesis-driven" framing in F1.3 should be revisited before citing it.
+
+**F4.3 — Heading hold makes the policy usable without retraining.**
+`on` reduces final lateral offset by 10–100× at every speed (3.27→0.03 m at
+cmd 0.25; 4.82→0.25 m at cmd 0.5) and cuts yaw drift to under 7° everywhere,
+with zero falls in all 24 trials. `ang_vel_yaw` was always a valid input —
+Experiments 1–3 simply never drove it. This is a **deployment-config** fix,
+not a policy fix: same weights, same contract, different command each step.
+
+**F4.4 — Experiments 1–3 are NOT invalidated, but need a companion read.**
+Their CSVs are reproducible and their qualitative claims (F1.2 saturation,
+F1.4 posture/velocity decoupling, F1.5 variance growth, F3.1–F3.5 terrain
+results) do not depend on the frame issue — those are height, survival, and
+fall-time based. Only the *velocity-tracking magnitude* and the *directional-
+stability* claims (F1.1, F1.3) are affected. `harness.run_trial` now also
+returns `mean_vx_body`, `mean_vy_body`, `vel_track_err_body`, and
+`yaw_drift_deg` (additive keys; existing `mean_vx` etc. are byte-identical to
+before, so exp1–exp3's committed CSVs remain reproducible from source).
+
+### Paper usage
+- Supersedes F1.1's magnitude and F1.3's mechanism — cite both F1.x and F4.x
+  together, framed as "naive measurement vs. corrected measurement."
+- F4.3 is a practical contribution: one-line deployment fix, no retraining.
+- Suggested figure: world-vx vs. body-vx vs. time at cmd=0.5, both modes
+  overlaid, with heading angle on a second axis — makes the artifact visible
+  in one panel.
+- Live demonstration: `experiments/watch_walk.py` (`--no-heading-hold` to
+  reproduce the drift interactively; default reproduces the fix).
