@@ -161,7 +161,8 @@ python stage2-go2-mujoco-inference/experiments/generate_terrain_scenes.py \
   && git diff --stat stage2-go2-mujoco-inference/scenes/        # must be EMPTY
 ```
 
-Container equivalents in [`docs/DOCKER.md`](docs/DOCKER.md).
+Container equivalents in [`docs/DOCKER.md`](docs/DOCKER.md); the host-native
+package inventory is in [`docs/NATIVE-SETUP.md`](docs/NATIVE-SETUP.md).
 
 ---
 
@@ -230,6 +231,7 @@ missing test suite.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | you need the system view + diagrams |
 | [`docs/TECH-STACK-PRIMER.md`](docs/TECH-STACK-PRIMER.md) | MuJoCo/PyTorch/Gymnasium are new to you |
 | [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) | setting up or something will not install |
+| [`docs/NATIVE-SETUP.md`](docs/NATIVE-SETUP.md) | running on the host, no container — package inventory and GPU gotchas |
 | [`docs/DOCKER.md`](docs/DOCKER.md) | running in a container |
 | [`docs/SRS.md`](docs/SRS.md) | you need the requirements |
 | [`docs/TDD.md`](docs/TDD.md) | you need to know *why* it is built this way |
