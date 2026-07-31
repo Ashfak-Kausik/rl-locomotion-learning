@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from paths import SCENES_DIR, require_policy, POLICY_DIR  # noqa: E402
+from obstacle_recovery import RecoveryController, yaw_of   # noqa: E402
 import harness as H                                        # noqa: E402
 
 K_HEADING = 1.5    # rad/s of commanded yaw rate per rad of heading error
@@ -40,6 +41,9 @@ def main():
     ap.add_argument("--cmd-vx", type=float, default=0.5)
     ap.add_argument("--gait", default="trot", choices=list(H.GAIT_PRESETS))
     ap.add_argument("--seconds", type=float, default=60.0)
+    ap.add_argument("--recovery", action="store_true",
+                    help="reactive obstacle negotiation: detect the stall, "
+                         "back up, steer around (see obstacle_recovery.py)")
     ap.add_argument("--no-heading-hold", action="store_true",
                     help="disable the fix, to see the original drift")
     args = ap.parse_args()
@@ -81,6 +85,8 @@ def main():
 
     dt = model.opt.timestep
     hold = not args.no_heading_hold
+    # --recovery implies heading control, so one controller serves both.
+    ctrl = RecoveryController(enabled=args.recovery)
     print(f"scene={args.scene} cmd_vx={args.cmd_vx} gait={args.gait} "
           f"heading_hold={hold}")
     print("Ctrl+C in this terminal, or close the window, to stop.")
@@ -91,10 +97,18 @@ def main():
         while viewer.is_running() and time.time() - start < args.seconds:
             step_start = time.time()
             if step % H.DECIMATION == 0:
-                if hold:
-                    err_rad = np.radians(H.yaw_deg(data.qpos[3:7]))
-                    commands_vec[2] = float(
-                        np.clip(-K_HEADING * err_rad, -MAX_YAW, MAX_YAW))
+                if hold or args.recovery:
+                    v_body = H.quat_rotate_inverse(data.qpos[3:7].copy(),
+                                                   data.qvel[0:3].copy())
+                    new_vx, new_yaw = ctrl.update(
+                        float(v_body[0]), float(yaw_of(data.qpos[3:7])),
+                        data.qpos[0:2].copy(), dt * H.DECIMATION, args.cmd_vx)
+                    commands_vec[0] = new_vx
+                    commands_vec[2] = new_yaw
+                    if ctrl.last_event == "stuck":
+                        print(f"  [recovery] stuck at x={data.qpos[0]:.2f}m "
+                              f"-> backing up and steering around "
+                              f"(#{ctrl.n_recoveries})")
                 gait_phase_t = (gait_phase_t
                                 + H.STEP_FREQUENCY * dt * H.DECIMATION) % 1.0
                 obs = H.build_obs(data, commands_vec, gait_params,
