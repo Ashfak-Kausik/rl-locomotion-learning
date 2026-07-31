@@ -235,8 +235,9 @@ class Trainer:
 
         n = b_obs.shape[0]
         indices = np.arange(n)
-        clipfracs, kls = [], []
+        clipfracs, kls, applied_kls = [], [], []
         pg_loss = v_loss = ent_loss = torch.tensor(0.0)
+        n_minibatches = n_rejected = 0
 
         stop_early = False
         for _ in range(cfg.update_epochs):
@@ -247,6 +248,7 @@ class Trainer:
                 mb = indices[start:start + cfg.minibatch_size]
                 if len(mb) < 2:
                     continue
+                n_minibatches += 1
 
                 new_logp, entropy, new_val = self.agent.evaluate_actions(
                     b_obs[mb], b_priv[mb], b_act[mb])
@@ -271,9 +273,20 @@ class Trainer:
                 # 15M-step run to catastrophic divergence (return -600 ->
                 # -65,535, std frozen, over ~800k steps) with the guard never
                 # firing. See EXPERIMENT_FINDINGS.md / stage3 README.
+                #
+                # kls (above) logs EVERY minibatch seen, applied or not, so
+                # a rejected minibatch's kl still shows up in a naive mean --
+                # a printed "kl 35" can look catastrophic even when nothing
+                # that bad was ever applied. applied_kls tracks only the ones
+                # that actually updated the network, which is what "did this
+                # update destabilise the policy" should be judged on. Found
+                # the hard way: a printed kl of 35 turned out to include
+                # rejected-but-never-applied minibatches.
                 if cfg.target_kl and approx_kl.item() > cfg.target_kl:
                     stop_early = True
+                    n_rejected += 1
                     break
+                applied_kls.append(approx_kl.item())
 
                 # Advantage normalisation per minibatch.
                 mb_adv = b_adv[mb]
@@ -306,7 +319,15 @@ class Trainer:
             "policy_loss": pg_loss.item(),
             "value_loss": v_loss.item(),
             "entropy": ent_loss.item(),
-            "approx_kl": float(np.mean(kls)) if kls else 0.0,
+            # kl: mean of ONLY the minibatches that actually updated the
+            # network -- this is what "did we take a bad step" should be
+            # judged on. kl_max: worst kl seen among ALL minibatches this
+            # update, applied or rejected -- how close to the edge things
+            # got, even for a step that was correctly blocked.
+            "approx_kl": float(np.mean(applied_kls)) if applied_kls else 0.0,
+            "kl_max": float(np.max(kls)) if kls else 0.0,
+            "n_rejected": n_rejected,
+            "n_minibatches": n_minibatches,
             "clip_fraction": float(np.mean(clipfracs)) if clipfracs else 0.0,
             "explained_variance": float(explained_var),
             "std": float(self.agent.log_std.exp().mean().item()),
@@ -455,7 +476,8 @@ class Trainer:
                 print(
                     f"upd {self.update:>5} | step {self.global_step:>9,} | "
                     f"ret {mean_ret} | "
-                    f"kl {stats['approx_kl']:.4f} | "
+                    f"kl {stats['approx_kl']:.4f} (max {stats['kl_max']:.2f}) | "
+                    f"rej {stats['n_rejected']}/{stats['n_minibatches']} | "
                     f"clip {stats['clip_fraction']:.2f} | "
                     f"ev {stats['explained_variance']:>6.3f} | "
                     f"std {stats['std']:.3f} | "

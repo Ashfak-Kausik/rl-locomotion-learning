@@ -33,5 +33,6 @@ stage3-go2-training/runs/
 .idea/
 .DS_Store
 
-# Local demo renders (large, regenerable)
+# Local demo renders (large, regenerable) -- wherever make_video.py is run from
 /demo_videos/
+*.mp4

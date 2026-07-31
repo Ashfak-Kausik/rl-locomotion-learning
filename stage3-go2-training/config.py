@@ -93,7 +93,17 @@ class Config:
     vf_coef: float = 0.5
     max_grad_norm: float = 1.0
     learning_rate: float = 3e-4
-    target_kl: float = 0.02      # early-stop an update; see Stage 1 findings
+    # Early-stop an update; see Stage 1 findings. Checked per-minibatch since
+    # the divergence-guard fix (train.py's ppo_update), which is stricter
+    # than the common per-epoch-mean check -- confirmed by the new
+    # kl/kl_max/n_rejected diagnostics: at gpu_minibatch_size=512, 0.02
+    # rejected roughly half of every epoch's minibatches from update 1
+    # onward on a fresh network, meaning most of each rollout's learning
+    # signal was being discarded every single update, not just as a rare
+    # safety net. Loosened to 0.035 -- still well below values (0.05-0.1)
+    # common in other PPO implementations -- to let more of a healthy epoch
+    # actually apply, while still rejecting genuinely large jumps.
+    target_kl: float = 0.035
     init_log_std: float = -1.0
 
     # --- adaptation module (phase 2) -----------------------------------
@@ -113,7 +123,17 @@ class Config:
     # you on CPU. Applied by tune_for_device().
     gpu_num_envs: int = 32
     gpu_rollout_steps: int = 64
-    gpu_minibatch_size: int = 2048
+    # steps_per_update = gpu_num_envs * gpu_rollout_steps = 2048. This MUST
+    # stay strictly smaller than that, or "minibatch" silently becomes the
+    # entire batch and update_epochs collapses into repeated full-batch
+    # gradient steps with zero stochastic-minibatch diversity between them --
+    # exactly the PPO anti-pattern that produces sustained high clip-fraction
+    # and KL blowups. Found by a real run: clip_fraction sat at 0.3-0.7 and
+    # return oscillated wildly (14 -> 673 -> -181 -> 456 ...) for its entire
+    # duration when this was 2048 == batch size. 512 gives 4 minibatches/
+    # epoch, standard PPO practice, at negligible extra kernel-launch cost on
+    # a GPU this small.
+    gpu_minibatch_size: int = 512
     tf32: bool = True            # Ampere+ tensor cores for fp32 matmuls
 
     def describe(self):
