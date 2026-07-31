@@ -241,7 +241,18 @@ class Go2Env:
         Returns (obs, privileged, reward, terminated, truncated, info) —
         Gym-style, with the privileged vector added for RMA phase 1.
         """
-        action = np.clip(np.asarray(action, dtype=np.float64), -100.0, 100.0)
+        # Was +-100, which permits joint targets of +-25 rad (action_scale
+        # 0.25) -- physically meaningless, and it let a diverging policy run
+        # away: measured on the failed multigait_v3 run, actions reached
+        # magnitude ~59, driving PD torques far past the Go2's ~45 Nm limit
+        # and a joint_torque penalty of -218/step against a tracking reward
+        # of +0.10/step. That makes returns ~-45,000, the value loss
+        # astronomical, and one gradient step big enough to blow KL to 19.
+        # The real walk-these-ways policy outputs roughly -0.75..1.05, so
+        # +-5 (= +-1.25 rad of joint offset) is still very generous while
+        # keeping the torque penalty in a sane range.
+        action = np.clip(np.asarray(action, dtype=np.float64),
+                         -self.cfg.action_clip, self.cfg.action_clip)
 
         # Action latency: what the motors receive may be a few steps stale.
         self._action_queue.append(action)

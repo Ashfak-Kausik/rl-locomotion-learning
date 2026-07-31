@@ -69,6 +69,10 @@ class Config:
     # already part of the 70-dim observation contract; nothing to add).
     randomize_gait: bool = True
     gait_pool: tuple = ("trot", "pace", "bound")
+    # Hard bound on policy output before it becomes a joint target. See the
+    # comment in go2_env.step -- an effectively unbounded action range is
+    # what let multigait_v3 diverge. +-5 => +-1.25 rad of joint offset.
+    action_clip: float = 5.0
     domain_rand: bool = True
     fall_penalty: float = -10.0
     tracking_sigma: float = 0.25
