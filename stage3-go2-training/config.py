@@ -52,7 +52,13 @@ class Config:
 
     # --- environment ---------------------------------------------------
     episode_seconds: float = 10.0
-    gait: str = "trot"
+    gait: str = "trot"           # used when randomize_gait is False
+    # Sample a gait per episode from this pool instead of training on one
+    # fixed gait. "All types of move" as a single policy, not three separate
+    # ones — same approach walk-these-ways itself used (the gait command is
+    # already part of the 70-dim observation contract; nothing to add).
+    randomize_gait: bool = True
+    gait_pool: tuple = ("trot", "pace", "bound")
     domain_rand: bool = True
     fall_penalty: float = -10.0
     tracking_sigma: float = 0.25

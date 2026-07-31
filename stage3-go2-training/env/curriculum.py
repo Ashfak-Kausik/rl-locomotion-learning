@@ -11,8 +11,10 @@ failure boundaries for the flat-trained baseline:
             "safe stall" at >= 5 cm         -> boundary is 2-5 cm
 
 So the curriculum starts at flat, promotes through terrain the baseline already
-handles, and then pushes past the boundary. Levels 0-2 reproduce the baseline's
-competence; levels 3+ are where a new policy has to beat it. That makes
+handles, and then pushes past the boundary. Levels 0-3 (flat, incl. a running-
+speed level) reproduce or exceed the baseline's competence; levels 4+ are
+where a new policy has to beat it on terrain the baseline cannot handle. That
+makes
 progress measurable against a real number instead of a vibe.
 
 Promotion rule: a level is cleared when the agent's recent mean episode return
@@ -43,6 +45,9 @@ LEVELS = [
           "learn to stand and walk at all"),
     Level("flat-fast", "go2_flat.xml", (0.0, 1.0), (-0.3, 0.3), (-0.5, 0.5),
           "full command range on flat ground"),
+    Level("flat-run", "go2_flat.xml", (0.5, 2.5), (-0.3, 0.3), (-0.5, 0.5),
+          "running speed regime — pushes past walk-these-ways' measured "
+          "~0.55 m/s ceiling (Exp 1 F1.2), commanded, not just fast trot"),
     Level("slope-10", "go2_slope_10.xml", (0.0, 0.75), (-0.2, 0.2), (-0.3, 0.3),
           "baseline manages this: 100% survival (Exp 3)"),
     Level("slope-15", "go2_slope_15.xml", (0.0, 0.75), (-0.2, 0.2), (-0.3, 0.3),
@@ -53,11 +58,19 @@ LEVELS = [
           "baseline: 0% survival (Exp 3)"),
     Level("stairs-8", "go2_stairs_08.xml", (0.0, 0.5), (0.0, 0.0), (-0.2, 0.2),
           "well beyond baseline capability"),
+    Level("obstacles-easy", "go2_obstacles_easy.xml", (0.0, 0.75),
+          (-0.3, 0.3), (-0.4, 0.4),
+          "free-world scattered obstacles, 12 boxes 10-20cm — go around or "
+          "step over, blind (no perception input, proprioception only)"),
+    Level("obstacles-hard", "go2_obstacles_hard.xml", (0.0, 0.75),
+          (-0.3, 0.3), (-0.4, 0.4),
+          "24 boxes 15-35cm, denser field — the hardest level"),
 ]
 
 # Index of the first level the flat-trained baseline cannot clear. Beating this
-# is the headline claim a Stage 3 policy would be making.
-BASELINE_CEILING = 3
+# is the headline claim a Stage 3 policy would be making. Bumped 3 -> 4 when
+# flat-run was inserted before it; slope-15 is still the actual boundary.
+BASELINE_CEILING = 4
 
 
 @dataclass

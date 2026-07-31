@@ -180,7 +180,10 @@ class Go2Env:
         if command is None:
             command = (self.rng.uniform(0.0, 0.5), 0.0, 0.0)
         self.cmd_vx, self.cmd_vy, self.cmd_yaw = command
-        self.gait = self.cfg.gait
+        if self.cfg.randomize_gait:
+            self.gait = self.rng.choice(self.cfg.gait_pool)
+        else:
+            self.gait = self.cfg.gait
         self.gait_params = GAIT_PRESETS[self.gait]
 
         # Rolling state.

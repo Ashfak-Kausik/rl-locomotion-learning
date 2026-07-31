@@ -132,11 +132,66 @@ def make_stairs_scene(step_h_cm):
     return name, xml
 
 
+def make_obstacle_scene(difficulty, n_obstacles, size_range, seed=0):
+    """
+    A flat field scattered with box obstacles - the "free world with
+    obstacles" terrain, as opposed to the single-feature slope/stairs scenes.
+    Reproducible: same seed always produces the same layout, so results are
+    comparable across training runs the same way the slopes/stairs are.
+
+    Obstacles are placed in a corridor ahead of the spawn point (x in
+    [1.5, 1.5 + corridor_len]), with a minimum spawn-clearance radius so the
+    robot never starts on top of one, and a minimum obstacle-to-obstacle
+    spacing so gaps stay traversable rather than forming a solid wall.
+    """
+    rng = np.random.default_rng(seed)
+    corridor_start, corridor_len, half_width = 1.5, 12.0, 1.8
+    min_spacing = 0.5
+
+    placed = []
+    attempts = 0
+    while len(placed) < n_obstacles and attempts < n_obstacles * 50:
+        attempts += 1
+        x = rng.uniform(corridor_start, corridor_start + corridor_len)
+        y = rng.uniform(-half_width, half_width)
+        if any(abs(x - px) < min_spacing and abs(y - py) < min_spacing
+               for px, py, _, _, _ in placed):
+            continue
+        sx = rng.uniform(*size_range)
+        sy = rng.uniform(*size_range)
+        placed.append((x, y, sx, sy, rng.uniform(0.5, 1.0)))  # last = rel. height factor
+
+    body = [
+        '    <!-- Flat field -->',
+        '    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"/>',
+    ]
+    for i, (x, y, sx, sy, hfac) in enumerate(placed):
+        # Height scales with footprint so bigger obstacles are also taller,
+        # like debris rather than uniform curbs — a genuine "avoid or step
+        # over" decision instead of a fixed-height repeat of the stairs test.
+        h = max(sx, sy) * hfac
+        body.append(
+            f'    <geom name="obs_{i}" type="box" '
+            f'pos="{x:.4f} {y:.4f} {h/2:.4f}" '
+            f'size="{sx/2:.4f} {sy/2:.4f} {h/2:.4f}" material="stepmat"/>'
+        )
+
+    name = f"go2_obstacles_{difficulty}.xml"
+    xml = (HEADER.format(model_name=f"go2 obstacles {difficulty}")
+           + "\n".join(body) + "\n" + FOOTER)
+    return name, xml
+
+
 def main():
     os.makedirs(SCENES_DIR, exist_ok=True)
 
     slope_angles = [5, 10, 15, 20, 25]
     step_heights_cm = [2, 5, 8, 12, 16]
+    # (difficulty, n_obstacles, (min_size_m, max_size_m))
+    obstacle_courses = [
+        ("easy", 12, (0.10, 0.20)),
+        ("hard", 24, (0.15, 0.35)),
+    ]
 
     written = []
 
@@ -149,6 +204,13 @@ def main():
 
     for h in step_heights_cm:
         name, xml = make_stairs_scene(h)
+        path = os.path.join(SCENES_DIR, name)
+        with open(path, "w") as f:
+            f.write(xml)
+        written.append(name)
+
+    for difficulty, n_obstacles, size_range in obstacle_courses:
+        name, xml = make_obstacle_scene(difficulty, n_obstacles, size_range)
         path = os.path.join(SCENES_DIR, name)
         with open(path, "w") as f:
             f.write(xml)

@@ -128,19 +128,31 @@ signature of a policy that never had drift penalised directly.
 
 Not guesswork — the measured points at which the flat-trained baseline breaks:
 
-| Level | Scene | Baseline result (Exp 3) |
+| Level | Scene | Baseline result (Exp 3 / F1.2) |
 |---|---|---|
 | 0 `flat-slow` | flat | trivial |
-| 1 `flat-fast` | flat | full command range |
-| 2 `slope-10` | 10° | 100% survival, traversable |
-| **3 `slope-15`** | 15° | **20% survival — baseline breaks here** |
-| 4 `stairs-5` | 5 cm | **safe stall**: 0.47 m, never climbs |
-| 5 `slope-20` | 20° | 0% survival |
-| 6 `stairs-8` | 8 cm | far beyond baseline |
+| 1 `flat-fast` | flat | full command range, ≤1.0 m/s |
+| 2 `flat-run` | flat | **beyond baseline**: cmd up to 2.5 m/s, past its ~0.55 m/s ceiling (F1.2) |
+| 3 `slope-10` | 10° | 100% survival, traversable |
+| **4 `slope-15`** | 15° | **20% survival — baseline breaks here** |
+| 5 `stairs-5` | 5 cm | **safe stall**: 0.47 m, never climbs |
+| 6 `slope-20` | 20° | 0% survival |
+| 7 `stairs-8` | 8 cm | far beyond baseline |
+| 8 `obstacles-easy` | 12 scattered boxes, 10–20 cm | not evaluated in Exp 1–3 (feature didn't exist) |
+| 9 `obstacles-hard` | 24 scattered boxes, 15–35 cm | not evaluated |
 
-Levels 0–2 reproduce the baseline's competence. **Level 3 onward is where a new
-policy has to actually beat it** — `BASELINE_CEILING = 3` marks that line, so
-progress is measurable against a real number rather than a vibe.
+Levels 0–3 reproduce or exceed the baseline's flat-ground competence (`flat-run`
+asks for genuine running speed, not just a longer fast-trot). **Level 4
+onward is where a new policy has to beat the baseline on terrain it cannot
+handle** — `BASELINE_CEILING = 4` marks that line.
+
+The obstacle levels are **blind**: no camera, no elevation map, proprioception
+only — consistent with the 70-dim contract this whole repo is built around,
+but a real limitation. State-of-the-art obstacle traversal (e.g. robot
+parkour, perceptive locomotion work cited below) uses depth or height-map
+input specifically because blind obstacle avoidance is much harder. Treat
+`obstacles-*` as "can it recover from an unseen bump/step," not "can it see
+and route around a field" — those are different problems.
 
 Promotion needs recent mean return ≥ 75% of the achievable maximum; sustained
 failure demotes. Demotion matters: without it, an agent pushed past its
@@ -322,11 +334,74 @@ against baseline figures read from the committed Experiment 1 CSV:
 | Checkpoint / resume | ✅ implemented |
 | TorchScript export | ✅ implemented, 4-way verified |
 | Evaluation vs baseline | ✅ implemented |
-| **A converged policy** | ⏳ **needs GPU compute — see above** |
+| Gait randomisation (trot/pace/bound per episode) | ✅ implemented, tested |
+| Running-speed curriculum level (`flat-run`, up to 2.5 m/s) | ✅ implemented, tested |
+| Obstacle-course terrain (`obstacles-easy/hard`) | ✅ implemented, tested — blind, proprioception only |
+| **A converged policy across all of the above** | ⏳ **needs GPU compute — see below** |
 | MJX/GPU backend | 📋 designed, not ported |
 
 The pipeline is complete and verified end to end. What is missing is compute,
 not code.
+
+---
+
+## "All types of movement" — what this can and cannot deliver in one session
+
+Multi-gait, running-speed, and obstacle-course training are wired in above
+and pass the test suite, but a single actually-converged multi-skill policy
+is a genuinely large training run, not a few-hour job. Being specific about
+why, so "not done yet" doesn't read as "not tried":
+
+**Scale.** Production multi-terrain Go2 policies (Isaac Lab / Isaac Gym) train
+with **4,096 parallel environments on an RTX 4090**. This repo's env is
+plain sequential MuJoCo on CPU, GPU-tuned to **32** parallel envs (see
+`config.tune_for_device`) — roughly two orders of magnitude fewer parallel
+samples per second. `env/go2_env.py` is deliberately the only backend-specific
+file so this is fixable (port to MJX, batched on GPU) without touching the
+reward, curriculum, or contract — see "The MJX/GPU path" below — but it is
+not ported yet.
+
+**Method.** The strongest published results for natural-looking multi-gait
+locomotion (walk, trot, gallop, recovery, all in one policy) use **AMP
+(Adversarial Motion Priors)** — training against a discriminator that
+compares the policy's motion to a reference motion-capture dataset, rather
+than hand-written reward shaping alone. This repo's 12 hand-written reward
+terms (`env/rewards.py`) are the same family used by walk-these-ways itself
+and are sufficient for functional multi-gait locomotion, but AMP is what
+produces gaits an animator would call natural, including a genuine flight
+phase for galloping rather than a fast trot.
+
+**What's real right now:** a background training run
+(`train.py --run-name multigait_v1 --timesteps 2000000 --device cuda`) is
+exercising exactly this — gait sampled per episode from `{trot, pace,
+bound}`, `flat-run`'s 2.5 m/s ceiling, and both obstacle levels — on the
+RTX 3050. At ~1,070 steps/s that's roughly 30 minutes for 2M steps, nowhere
+near convergence (10⁸–10⁹ steps is the typical range for legged locomotion)
+but enough to confirm the whole pipeline — new curriculum levels, gait
+sampling, obstacle terrain — trains without crashing, curriculum-promotes
+correctly, and exports a contract-valid policy at the end.
+
+### References found for extending this further
+
+- **AMP for quadrupeds, open dataset**: [inspirai/MetalHead](https://github.com/inspirai/MetalHead) —
+  Unitree A1, includes motion-capture reference clips for
+  gallop/jump/trot/turn, trained with AMP. The closest open, license-clear
+  starting point for a reference-motion dataset if this repo adds AMP.
+- **GPU-batched MuJoCo, the actual target for the MJX port**:
+  [MuJoCo Playground](https://playground.mujoco.org/) — JAX/MJX-batched
+  environments including Go1 locomotion; the technical report documents the
+  exact batching pattern `env/go2_env.py` would need to adopt.
+- **Concrete Go2 + MuJoCo Playground + obstacle curriculum reference**:
+  [NtagkasAlex/phase_guided_terrain_traversal](https://github.com/NtagkasAlex/phase_guided_terrain_traversal) —
+  7-terrain curriculum (flat/wave/slope/rough-slope/stairs-up/stairs-down/
+  obstacle) on real Go2 hardware, MuJoCo Playground in sim. Closest published
+  analogue to this repo's own curriculum design.
+- **Why blind obstacle traversal is the harder problem**: robot parkour work
+  ([Robot Parkour Learning](https://arxiv.org/pdf/2309.05665),
+  [Humanoid Parkour Learning](https://arxiv.org/pdf/2406.10759)) uses depth
+  input specifically because proprioception-only obstacle avoidance (what
+  `obstacles-easy/hard` above give you) is a fundamentally harder,
+  reactive-only problem — worth reading before assuming vision is optional.
 
 ---
 
