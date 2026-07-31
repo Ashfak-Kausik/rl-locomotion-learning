@@ -65,10 +65,14 @@ the single best return on effort available to you.
 | Claude Code | `CLAUDE.md` (repo root; also `~/.claude/CLAUDE.md` for personal prefs) |
 | Cursor | `.cursor/rules/*.mdc` (modern) or `.cursorrules` (legacy) |
 | GitHub Copilot | `.github/copilot-instructions.md` |
-| Generic / multi-tool | `AGENTS.md` — an emerging cross-tool convention |
+| Generic / multi-tool | `AGENTS.md` — the cross-tool convention (Cursor, Copilot, Codex, Gemini CLI, Windsurf, Devin, Aider, ... all read it; Claude Code does not, natively) |
 
-This repo ships a [`CLAUDE.md`](../CLAUDE.md) at the root. Read it — it is
-short, and it encodes the traps.
+This repo ships a [`CLAUDE.md`](../CLAUDE.md) at the root — read it, it is
+short and it encodes the traps — plus [`AGENTS.md`](../AGENTS.md), a symlink
+to the same file. Claude Code only reads `CLAUDE.md`, so the symlink exists
+purely so a non-Claude tool opening this repo gets the identical content
+without a second file to keep in sync. Edit `CLAUDE.md`; `AGENTS.md` follows
+automatically because it's the same inode, not a copy.
 
 ### What belongs in a context file
 
@@ -191,9 +195,56 @@ would do.
 ## 5. Hooks and automation
 
 Hooks run shell commands on agent lifecycle events (before/after a tool call,
-on session start). Configure in `.claude/settings.json`.
+on session start), configured in `.claude/settings.json`. The value is a
+**deterministic gate**: a hook either fires or it doesn't, unlike a rule
+written in prose in a context file, which is only as reliable as the model's
+attention to it deep in a long session.
 
-Useful patterns for this repo:
+**Two hooks are live in this repo** (`.claude/hooks/`, wired in
+`.claude/settings.json`), both `PreToolUse` — they run *before* the tool
+call, so a block actually prevents the action rather than just complaining
+after:
+
+```jsonc
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{"type": "command",
+                   "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_commit_footprint.py\""}]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{"type": "command",
+                   "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/warn_contract_edit.py\""}]
+      }
+    ]
+  }
+}
+```
+
+**`guard_commit_footprint.py`** — hard block, exit 2. Turns the "commits
+carry no agentic footprint" rule from CLAUDE.md prose into something that
+mechanically cannot slip through: any `git commit` whose message contains
+`Co-Authored-By: Claude`, `Generated with`, or similar is denied before it
+runs, with the reason fed back to the agent so it retries clean.
+
+**`warn_contract_edit.py`** — soft warning, exit 0, injects
+`additionalContext`. Fires when an `Edit`/`Write` to `harness.py`,
+`networks.py`, or `go2_env.py` touches one of the observation-contract
+constants (`DEFAULT_JOINT_POS`, `OBS_SCALES`, `KP`/`KD`, `DECIMATION`, ...).
+Doesn't block — these files are legitimately edited, this session added
+body-frame metrics to `harness.py` — it just surfaces the exact CLAUDE.md
+warning ("a wrong value fails silently in the simulator") at the moment of
+the edit, and points at the two tests that exist to catch it.
+
+The asymmetry is deliberate: mechanically enforce the rule that has no
+legitimate exception (no commit should ever need an AI trailer); only remind
+for the rule that has plenty of legitimate exceptions (contract files get
+edited on purpose, they just need extra scrutiny when they do).
+
+Other useful patterns for this repo, not yet wired up:
 
 ```jsonc
 {
@@ -210,13 +261,10 @@ Useful patterns for this repo:
 }
 ```
 
-The value is a **fast, automatic feedback loop**: the agent finds out it broke
-something within one turn rather than three. For this codebase the highest-value
-hooks are a syntax check on edit and — once tests exist — running them.
-
 > Note: hooks execute shell commands with your permissions. Only add hooks you
 > would be comfortable running yourself, and read any hook config you did not
-> write.
+> write. `.claude/hooks/*.py` are committed and reviewable like any other
+> code — read them before trusting them, same as any hook from elsewhere.
 
 ---
 
