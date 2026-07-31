@@ -26,7 +26,17 @@ def default_reward_weights():
     return {
         # --- objective -------------------------------------------------
         "tracking_lin_vel": 1.5,
-        "tracking_ang_vel": 0.5,
+        # 0.5 -> 0.35: empirically, standing perfectly still scores this term
+        # near its max (yaw rate is trivially ~0), while an actual trot's
+        # natural small yaw-rate oscillation scores meaningfully lower
+        # (measured: 0.50/step standing vs 0.28/step walking, same env, real
+        # walk-these-ways policy). That shrinks the reward margin that should
+        # be pulling early-training exploration toward walking. Total reward
+        # was still higher walking than standing either way (1.29 vs 1.00/
+        # step) -- this is not "stand-still is the local optimum", it's
+        # "the margin is smaller than it should be". See the diagnostic run
+        # referenced in EXPERIMENT_FINDINGS.md / stage3 README.
+        "tracking_ang_vel": 0.35,
         "alive": 0.5,
         # --- stability -------------------------------------------------
         "lateral_drift": 0.5,      # Exp 1 F1.3: baseline never penalised this

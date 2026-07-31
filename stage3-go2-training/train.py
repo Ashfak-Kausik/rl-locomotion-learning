@@ -159,6 +159,13 @@ class Trainer:
         self.update = 0
         self.episode_returns = []
         self.start_time = time.time()
+        # Tracks the best recent-mean-return seen so far; checkpoint_best.pt
+        # is only overwritten on improvement. checkpoint_latest.pt is
+        # overwritten every save_every_updates regardless, so a late
+        # divergence (PPO update that blows past target_kl -- see
+        # ppo_update's per-minibatch guard) can otherwise destroy the only
+        # saved copy of the run's actual best policy. Cheap insurance.
+        self.best_mean_return = -float("inf")
 
         # Live env state
         self._obs = np.zeros((cfg.num_envs, HISTORY_DIM), dtype=np.float32)
@@ -231,7 +238,10 @@ class Trainer:
         clipfracs, kls = [], []
         pg_loss = v_loss = ent_loss = torch.tensor(0.0)
 
+        stop_early = False
         for _ in range(cfg.update_epochs):
+            if stop_early:
+                break
             np.random.shuffle(indices)
             for start in range(0, n, cfg.minibatch_size):
                 mb = indices[start:start + cfg.minibatch_size]
@@ -250,6 +260,20 @@ class Trainer:
                     clipfracs.append(
                         ((ratio - 1.0).abs() > cfg.clip_coef).float()
                         .mean().item())
+
+                # Checked BEFORE applying this minibatch's gradient, not
+                # after -- a bad minibatch found mid-epoch must not update
+                # the network at all. The previous version only checked
+                # kls[-1] once per epoch (the LAST minibatch of a shuffled
+                # order, so it could miss a spike entirely) and only stopped
+                # FUTURE epochs -- the epoch that overshot had already fully
+                # applied its update. That let one bad minibatch push a
+                # 15M-step run to catastrophic divergence (return -600 ->
+                # -65,535, std frozen, over ~800k steps) with the guard never
+                # firing. See EXPERIMENT_FINDINGS.md / stage3 README.
+                if cfg.target_kl and approx_kl.item() > cfg.target_kl:
+                    stop_early = True
+                    break
 
                 # Advantage normalisation per minibatch.
                 mb_adv = b_adv[mb]
@@ -272,11 +296,6 @@ class Trainer:
                 nn.utils.clip_grad_norm_(self.agent.parameters(),
                                          cfg.max_grad_norm)
                 self.optimizer.step()
-
-            # Stage 1 taught this: approx_kl above ~0.02 means the updates are
-            # too aggressive. Stop the epoch loop rather than let it diverge.
-            if cfg.target_kl and kls and kls[-1] > cfg.target_kl:
-                break
 
         y_pred, y_true = b_val.cpu().numpy(), b_ret.cpu().numpy()
         var_y = np.var(y_true)
@@ -376,6 +395,7 @@ class Trainer:
             "update": self.update,
             "curriculum": self.curriculum.state_dict(),
             "episode_returns": self.episode_returns[-200:],
+            "best_mean_return": self.best_mean_return,
             "config": {k: v for k, v in self.cfg.__dict__.items()},
             "torch_rng": torch.get_rng_state(),
         }, path)
@@ -390,6 +410,7 @@ class Trainer:
         self.update = ckpt["update"]
         self.curriculum.load_state_dict(ckpt["curriculum"])
         self.episode_returns = list(ckpt.get("episode_returns", []))
+        self.best_mean_return = ckpt.get("best_mean_return", -float("inf"))
         if "torch_rng" in ckpt:
             torch.set_rng_state(ckpt["torch_rng"].cpu())
         self._reset_all()
@@ -418,7 +439,18 @@ class Trainer:
                 # Episodes are longer than one rollout, so no episode has
                 # finished for the first few updates. Show "--" rather than
                 # a nan that reads like a divergence bug.
-                mean_ret = f"{np.mean(recent):>8.1f}" if recent else f"{'--':>8}"
+                if recent:
+                    mean_ret_val = float(np.mean(recent))
+                    mean_ret = f"{mean_ret_val:>8.1f}"
+                    # Require a decent-sized window before trusting it as
+                    # "best" -- the first few episodes after a reset/resume
+                    # are noisy and would otherwise falsely win.
+                    if (len(recent) >= 20
+                            and mean_ret_val > self.best_mean_return):
+                        self.best_mean_return = mean_ret_val
+                        self.save("best")
+                else:
+                    mean_ret = f"{'--':>8}"
                 sps = self.global_step / max(time.time() - self.start_time, 1e-6)
                 print(
                     f"upd {self.update:>5} | step {self.global_step:>9,} | "
