@@ -391,7 +391,7 @@ Specific, observed failure modes. Guard against each explicitly.
 | 3 | Deduplicates `01`–`06` | duplication genuinely looks like a defect | say "curriculum, not application" in the context file |
 | 4 | Flips a hip sign | `+0.1`/`−0.1` alternating looks like a typo | cite `go2.xml` lines 189–200 as the authority |
 | 5 | Changes `DECIMATION` while "optimising" | it looks like a tunable | mark control constants immutable |
-| 6 | Invents a download URL for the checkpoints | it wants to be helpful about a missing file | there is no canonical public URL — see [DEPENDENCIES.md §6](DEPENDENCIES.md#6-the-one-dependency-we-cannot-install) |
+| 6 | Guesses/invents a download URL, or asserts none exists without checking | wants to be helpful, or trusts stale docs | the real one is verified in [DEPENDENCIES.md §6](DEPENDENCIES.md#6-the-policy-weights-are-not-committed-here-but-are-downloadable) — use it or re-verify, don't guess |
 | 7 | Reports "tests pass" without running them | plausible-sounding completion | demand pasted output (§9) |
 | 8 | Edits experiment constants to re-run a sweep | it is the shortest path to the request | new `exp4_*.py` instead; keep past results reproducible |
 | 9 | "Fixes" `null` metrics for fallen trials | nulls look like a bug | nulls are deliberate — see [TDD.md §5](TDD.md#5-error-handling) |

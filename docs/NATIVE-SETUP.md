@@ -112,20 +112,30 @@ To go back to CPU-only: `pip install torch --index-url https://download.pytorch.
 |---|---|
 | `nvidia-container-toolkit` | only needed for the Docker `gpu` service; Docker is unused here |
 | `mujoco-mjx`, `jax[cuda12]` | the MJX port is designed but not written — see Stage 3 README |
-| walk-these-ways policy weights | **cannot be installed.** A large external binary with no canonical public URL. See [`DEPENDENCIES.md` §6](DEPENDENCIES.md#6-the-one-dependency-we-cannot-install) |
+| walk-these-ways policy weights (in **this repo's git**) | not committed here on purpose — `policies/` is gitignored, they are a large external input. **They ARE downloadable** — see below and [`DEPENDENCIES.md` §6](DEPENDENCIES.md#6-the-policy-weights-are-not-committed-here-but-are-downloadable) |
 
-The missing weights block scripts `05`–`08` and experiments 1–3 **only**.
-Everything else runs, and `make_figures.py` regenerates all four data figures
-from committed CSVs. A Stage 3 export can stand in for the weights:
+The real `walk-these-ways-go2` weights were downloaded and verified on this
+machine on 2026-07-31. The Go2 fork commits its pretrained checkpoint into
+git, MIT licensed: <https://github.com/Teddy-Liao/walk-these-ways-go2>.
+
+```bash
+mkdir -p policies/walk-these-ways-go2
+BASE="https://raw.githubusercontent.com/Teddy-Liao/walk-these-ways-go2/main/runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
+curl -sL --fail "$BASE/body_latest.jit"              -o policies/walk-these-ways-go2/body_latest.jit
+curl -sL --fail "$BASE/adaptation_module_latest.jit" -o policies/walk-these-ways-go2/adaptation_module_latest.jit
+python stage2-go2-mujoco-inference/paths.py           # confirms both OK
+```
+
+Without them, scripts `05`–`08` and experiments 1–3 are the only things
+blocked; `make_figures.py` still regenerates all four data figures from
+committed CSVs. A Stage 3 export can stand in too, if you want an untrained
+control condition instead of the real weights:
 
 ```bash
 python stage3-go2-training/train.py --smoke
 python stage3-go2-training/export.py --checkpoint stage3-go2-training/runs/smoke/checkpoint_final.pt
-export GO2_POLICY_DIR=$PWD/policies/stage3-smoke     # now 05-08 run
+export GO2_POLICY_DIR=$PWD/policies/stage3-smoke     # now 05-08 run, but stand still (untrained)
 ```
-
-That policy is untrained and will stand still, but it exercises every code
-path the real weights would.
 
 ---
 

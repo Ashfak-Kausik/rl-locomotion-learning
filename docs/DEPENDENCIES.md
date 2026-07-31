@@ -213,7 +213,7 @@ regenerate every data figure with **no policy weights and no simulation**.
 
 ---
 
-## 6. The one dependency we cannot install
+## 6. The policy weights are not committed here, but ARE downloadable
 
 ### `walk-these-ways` policy checkpoints
 
@@ -223,27 +223,41 @@ policies/walk-these-ways-go2/
 └── adaptation_module_latest.jit     RMA student  (1, 2100) → (1, 2)
 ```
 
-**Why they are not here:** they are TorchScript exports of a policy trained in
-NVIDIA Isaac Gym on GPU hardware. They are large binaries with no stable public
-download, and they are not this project's output — they are its *input*.
+**Why they are not committed to THIS repo:** they are TorchScript exports of a
+policy trained in NVIDIA Isaac Gym on GPU hardware — a large binary and not
+this project's output, just its input. `policies/` is gitignored on purpose
+(see `.gitignore`).
 
-**How to get them:**
+**They previously read as unobtainable here. They are not.** The Go2 fork
+commits its pretrained checkpoint straight into git, MIT licensed:
+<https://github.com/Teddy-Liao/walk-these-ways-go2>. Verified 2026-07-31 —
+downloaded, loaded with `torch.jit.load`, and confirmed to satisfy the 70-dim
+contract exactly (`(1,2100)→(1,2)`, `(1,2102)→(1,12)`) before trusting them.
 
-1. Obtain the two files from the `walk-these-ways` Go2 training run this
-   project used (the original author's checkpoint directory was
-   `runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints`).
-2. Or export your own from a `walk-these-ways` training run —
-   upstream: <https://github.com/Improbable-AI/walk-these-ways>.
-   The Go2 port is a community fork of that repo.
-3. Or, once **Stage 3** lands, train a replacement with MJX /
-   `mujoco_playground` and export it to TorchScript.
+```bash
+mkdir -p policies/walk-these-ways-go2
+BASE="https://raw.githubusercontent.com/Teddy-Liao/walk-these-ways-go2/main/runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
+curl -sL --fail "$BASE/body_latest.jit"              -o policies/walk-these-ways-go2/body_latest.jit
+curl -sL --fail "$BASE/adaptation_module_latest.jit" -o policies/walk-these-ways-go2/adaptation_module_latest.jit
+```
+
+Other ways to get the same two files, if that mirror ever moves:
+
+1. Upstream `walk-these-ways` (Go1, not Go2) ships its own pretrained run —
+   <https://github.com/Improbable-AI/walk-these-ways>, `runs/pretrain-v0/`.
+   Not contract-compatible with this repo (different robot); useful only as
+   a reference for where checkpoints live in this family of repos.
+2. Export your own from a `walk-these-ways-go2` training run.
+3. Train a replacement in **Stage 3** (`stage3-go2-training/`) and export it
+   with `export.py` — no GPU compute currently available for a converged run,
+   but the pipeline is complete and produces contract-valid weights today
+   (`--smoke`, or `--random` for an untrained control condition).
 
 **Where to put them:**
 
 ```bash
-# Option 1 — the default location
-cp body_latest.jit adaptation_module_latest.jit \
-   policies/walk-these-ways-go2/
+# Option 1 — the default location (matches the curl commands above)
+# already correct if you used them as shown
 
 # Option 2 — keep them anywhere and point at it
 export GO2_POLICY_DIR=/absolute/path/to/checkpoints

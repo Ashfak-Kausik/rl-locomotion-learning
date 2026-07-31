@@ -131,13 +131,18 @@ Environment variables (`paths.py`):
 
 ---
 
-## Missing policy weights are normal
+## Missing policy weights are normal, and they ARE downloadable
 
 `policies/walk-these-ways-go2/{body_latest.jit,adaptation_module_latest.jit}`
-are **not** in the repo. They are a large external input, not project output.
+are **not** in this repo. They are a large external input, not project output,
+and `policies/` is gitignored on purpose.
 
-**Do not invent a download URL for them.** There is no canonical public one.
-See [`docs/DEPENDENCIES.md` §6](docs/DEPENDENCIES.md#6-the-one-dependency-we-cannot-install).
+They used to read as unobtainable here. They are not: the Go2 fork commits
+its pretrained checkpoint into git, MIT licensed —
+<https://github.com/Teddy-Liao/walk-these-ways-go2>. Verified 2026-07-31:
+downloaded, loaded, confirmed to satisfy the 70-dim contract exactly before
+trusting them. Get-and-verify steps in
+[`docs/DEPENDENCIES.md` §6](docs/DEPENDENCIES.md#6-the-policy-weights-are-not-committed-here-but-are-downloadable).
 
 Plenty works without them: all of Stage 1, Stage 2 scripts `01`–`04`, scene
 generation, terrain inspection, and `make_figures.py` (which regenerates all
@@ -219,7 +224,12 @@ missing test suite.
 2. **Train a Stage 3 policy on GPU** — the pipeline is complete and verified;
    what is missing is compute. See `stage3-go2-training/README.md`.
 3. **Port the Stage 3 env to MJX** — only `env/go2_env.py` is backend-specific.
-4. Banner `04_build_obs_vector.py` as superseded; fix R5 and R8.
+4. ~~Banner `04_build_obs_vector.py` as superseded; fix R5 and R8.~~ Done.
+5. **Extend heading hold (F4) to `06`/`07`'s teaching scripts, or retire
+   world-frame-only measurement in Experiments 1–3.** `harness.py` now
+   exposes body-frame velocity and yaw drift; Exp 1's headline tracking
+   number and Exp 1's F1.3 hypothesis both need re-derivation with it — see
+   `EXPERIMENT_FINDINGS.md` Experiment 4.
 
 ---
 

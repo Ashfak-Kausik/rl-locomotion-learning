@@ -59,8 +59,15 @@ These are TorchScript exports of a policy trained in Isaac Gym. They are
 large binaries and are deliberately NOT committed to this repository, so you
 must supply them yourself:
 
-  1. Obtain the two .jit files (from the walk-these-ways Go2 training run
-     used for this project, or export them from your own training run).
+  1. Download them (MIT-licensed Go2 fork commits its pretrained run):
+
+       mkdir -p policies/walk-these-ways-go2
+       BASE="https://raw.githubusercontent.com/Teddy-Liao/walk-these-ways-go2/main/runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
+       curl -sL --fail "$BASE/body_latest.jit"              -o policies/walk-these-ways-go2/body_latest.jit
+       curl -sL --fail "$BASE/adaptation_module_latest.jit" -o policies/walk-these-ways-go2/adaptation_module_latest.jit
+
+     Or export your own from a walk-these-ways-go2 training run, or from
+     Stage 3 (stage3-go2-training/export.py).
   2. Put them anywhere, then point the scripts at that directory:
 
        export GO2_POLICY_DIR=/absolute/path/to/checkpoints

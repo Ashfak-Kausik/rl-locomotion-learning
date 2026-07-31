@@ -31,9 +31,10 @@ python scripts/check_env.py
 ```
 
 Read the ASSETS section. If it says **`walk-these-ways checkpoints NOT FOUND`**,
-that is normal and expected — they are a large external input, not project
-output (`docs/DEPENDENCIES.md` §6). Everything in the "no" column above still
-runs. Do not go looking for a download URL; there is no canonical public one.
+that is normal — they are a large external input, gitignored on purpose, not
+project output. Everything in the "no" column above still runs. They ARE
+downloadable though, from the MIT-licensed Go2 fork that commits them into
+git; see `docs/DEPENDENCIES.md` §6 for the verified `curl` commands.
 
 ---
 
