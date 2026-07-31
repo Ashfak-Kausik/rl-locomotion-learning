@@ -178,6 +178,27 @@ installed here, so it will not happen unprompted.
 `LIBGL_ALWAYS_SOFTWARE=1` workaround in `CLAUDE.md` gets you running before
 the reboot; it is not needed after.
 
+**The GUI viewer exits 139 (SIGSEGV) even on a fully successful run.** Every
+script using `mujoco.viewer.launch_passive` — `01`, `03`, `04`, `06`, `07`,
+`08` — segfaults during interpreter shutdown, *after* the simulation loop and
+the context manager have both completed. Confirmed with a minimal repro:
+
+```
+SIM LOOP OK, leaving context manager
+CONTEXT EXITED CLEANLY
+exit=139
+```
+
+Results are unaffected — the crash is in GL/GLFW teardown, once all Python
+work is done and output is flushed. But **the exit code is a lie**, so these
+scripts cannot be used in `make`, CI, or any `cmd && next` chain without
+guarding. Ending the script with `os._exit(0)` skips the teardown and exits 0;
+verified. The curriculum scripts are deliberately left unpatched, since they
+are meant to be read as lessons rather than wired into automation.
+
+Offscreen rendering (`egl`, `osmesa`) does not use the viewer and is
+unaffected — prefer it for anything scripted.
+
 **`stage1-rl-fundamentals/tb_logs/` is tracked in git** despite matching
 `.gitignore`. Never `rm` it.
 
