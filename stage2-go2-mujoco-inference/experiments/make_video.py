@@ -34,18 +34,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from paths import SCENES_DIR, POLICY_DIR, require_policy  # noqa: E402
+from obstacle_recovery import RecoveryController, yaw_of   # noqa: E402
 import harness as H                                        # noqa: E402
 
 K_HEADING, MAX_YAW = 1.5, 0.6
 
 
-def yaw_of(quat):
-    w, x, y, z = quat
-    return np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-
-
 def render(out_path, scene, cmd_vx, gait, seconds, heading_hold,
-          width=960, height=540, fps=50):
+          width=960, height=540, fps=50, recovery=False):
     require_policy()
     body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit"); body_net.eval()
     adapt_net = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")
@@ -90,13 +86,20 @@ def render(out_path, scene, cmd_vx, gait, seconds, heading_hold,
     mujoco.mjv_defaultCamera(cam)
     cam.distance, cam.azimuth, cam.elevation = 3.0, 130, -14
 
+    # recovery=True implies heading control, so one controller serves both.
+    ctrl = RecoveryController(enabled=recovery)
+
     frames = []
     for step in range(n_steps):
         if step % H.DECIMATION == 0:
-            if heading_hold:
-                err_rad = float(yaw_of(data.qpos[3:7]))
-                commands_vec[2] = float(
-                    np.clip(-K_HEADING * err_rad, -MAX_YAW, MAX_YAW))
+            if heading_hold or recovery:
+                v_body = H.quat_rotate_inverse(data.qpos[3:7].copy(),
+                                               data.qvel[0:3].copy())
+                new_vx, new_yaw = ctrl.update(
+                    float(v_body[0]), float(yaw_of(data.qpos[3:7])),
+                    data.qpos[0:2].copy(), dt * H.DECIMATION, cmd_vx)
+                commands_vec[0] = new_vx
+                commands_vec[2] = new_yaw
             gait_phase_t = (gait_phase_t
                             + H.STEP_FREQUENCY * dt * H.DECIMATION) % 1.0
             obs = H.build_obs(data, commands_vec, gait_params,
@@ -129,7 +132,7 @@ def render(out_path, scene, cmd_vx, gait, seconds, heading_hold,
     return dict(
         out_path=out_path, n_frames=len(frames),
         travelled_x=float(data.qpos[0]), travelled_y=float(data.qpos[1]),
-        final_height=float(data.qpos[2]),
+        final_height=float(data.qpos[2]), n_recoveries=ctrl.n_recoveries,
     )
 
 
@@ -144,6 +147,9 @@ def main():
     ap.add_argument("--seconds", type=float, default=15.0)
     ap.add_argument("--no-heading-hold", action="store_true",
                     help="disable the F4 fix, to see the original drift")
+    ap.add_argument("--recovery", action="store_true",
+                    help="enable reactive obstacle negotiation (stall -> "
+                         "back up -> steer around); see obstacle_recovery.py")
     ap.add_argument("--width", type=int, default=960)
     ap.add_argument("--height", type=int, default=540)
     ap.add_argument("--fps", type=int, default=50)
@@ -151,12 +157,14 @@ def main():
 
     result = render(args.out, args.scene, args.cmd_vx, args.gait, args.seconds,
                     heading_hold=not args.no_heading_hold,
-                    width=args.width, height=args.height, fps=args.fps)
+                    width=args.width, height=args.height, fps=args.fps,
+                    recovery=args.recovery)
 
     print(f"{result['out_path']}  {result['n_frames']} frames  "
           f"travelled x={result['travelled_x']:.2f}m "
           f"y={result['travelled_y']:+.2f}m "
-          f"height={result['final_height']:.3f}m")
+          f"height={result['final_height']:.3f}m "
+          f"recoveries={result['n_recoveries']}")
 
 
 if __name__ == "__main__":
