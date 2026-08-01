@@ -318,13 +318,22 @@ class Go2Env:
         tilt = tilt_angle_deg(quat)
         fell = height < FALL_HEIGHT_THRESHOLD or tilt > FALL_TILT_THRESHOLD_DEG
 
+        # BODY-frame velocity. The commands the policy receives are body
+        # frame (see build_obs), but d.qvel[0:3] is WORLD frame -- the same
+        # mismatch found in harness.py and written up as EXPERIMENT_FINDINGS
+        # F4.1. Rewarding world-frame velocity means a robot that turns is
+        # penalised even when its actual forward speed is perfect, which
+        # teaches it that turning is bad rather than that drifting is.
+        v_body = quat_rotate_inverse(quat, d.qvel[0:3].copy())
+
         terms = {
             "tracking_lin_vel": R.tracking_lin_vel(
-                self.cmd_vx, self.cmd_vy, d.qvel[0], d.qvel[1],
+                self.cmd_vx, self.cmd_vy, v_body[0], v_body[1],
                 self.cfg.tracking_sigma),
+            "forward_progress": R.forward_progress(self.cmd_vx, v_body[0]),
             "tracking_ang_vel": R.tracking_ang_vel(
                 self.cmd_yaw, d.qvel[5], self.cfg.tracking_sigma),
-            "lateral_drift": R.lateral_drift(d.qvel[1]),
+            "lateral_drift": R.lateral_drift(v_body[1]),
             "vertical_velocity": R.vertical_velocity(d.qvel[2]),
             "body_orientation": R.body_orientation(proj_grav),
             "body_height": R.body_height(height),
@@ -356,6 +365,7 @@ class Go2Env:
             w = self.cfg.reward_weights
             per_step = (w.get("tracking_lin_vel", 0.0)
                         + w.get("tracking_ang_vel", 0.0)
+                        + w.get("forward_progress", 0.0)
                         + w.get("alive", 0.0))
             self._max_return = per_step * self.max_episode_steps
         return self._max_return

@@ -25,19 +25,29 @@ def default_reward_weights():
     """
     return {
         # --- objective -------------------------------------------------
-        "tracking_lin_vel": 1.5,
-        # 0.5 -> 0.35: empirically, standing perfectly still scores this term
-        # near its max (yaw rate is trivially ~0), while an actual trot's
-        # natural small yaw-rate oscillation scores meaningfully lower
-        # (measured: 0.50/step standing vs 0.28/step walking, same env, real
-        # walk-these-ways policy). That shrinks the reward margin that should
-        # be pulling early-training exploration toward walking. Total reward
-        # was still higher walking than standing either way (1.29 vs 1.00/
-        # step) -- this is not "stand-still is the local optimum", it's
-        # "the margin is smaller than it should be". See the diagnostic run
-        # referenced in EXPERIMENT_FINDINGS.md / stage3 README.
-        "tracking_ang_vel": 0.35,
-        "alive": 0.5,
+        # Rebalanced after multigait_v4 converged to standing perfectly
+        # still. Its measured per-step breakdown was:
+        #     alive             0.500   <- 67% of reward, free for standing
+        #     tracking_ang_vel  0.317   <- 42%, maximised by NOT turning
+        #     tracking_lin_vel  0.029   <- 3.8%, the actual objective
+        # i.e. 0.82/step for standing still versus 0.03 for the thing we
+        # want. Standing was not a bug, it was the rational optimum.
+        "tracking_lin_vel": 2.0,
+        # Linear and non-saturating: the exponential kernel above is flat
+        # far from target, so a stationary robot cannot feel the gradient.
+        # This one always pays to move faster. See rewards.forward_progress.
+        "forward_progress": 1.0,
+        # 0.35 -> 0.2. Standing scores this near its maximum (yaw rate is
+        # trivially ~0) while a real trot's natural yaw oscillation scores
+        # lower -- measured 0.50/step standing vs 0.28/step walking. It was
+        # the second-largest reward source for doing nothing.
+        "tracking_ang_vel": 0.2,
+        # 0.5 -> 0.15. This is a pure participation trophy: paid every step
+        # for not having fallen over, and it was 67% of the standing
+        # policy's entire reward. It still needs to be positive so that
+        # falling is worse than surviving, but it must not be competitive
+        # with actually moving.
+        "alive": 0.15,
         # --- stability -------------------------------------------------
         "lateral_drift": 0.5,      # Exp 1 F1.3: baseline never penalised this
         "vertical_velocity": 0.5,
@@ -75,7 +85,13 @@ class Config:
     action_clip: float = 5.0
     domain_rand: bool = True
     fall_penalty: float = -10.0
-    tracking_sigma: float = 0.25
+    # 0.25 -> 0.4. sigma sets how far from target the exponential kernel
+    # still has usable gradient. At 0.25, a stationary robot commanded to
+    # 0.5 m/s scores 0.018 with gradient 0.29 -- effectively flat, so it
+    # cannot tell that moving would help. At 0.4 the same state scores 0.210
+    # with gradient 1.31, a 4.5x stronger learning signal exactly where the
+    # policy was stuck.
+    tracking_sigma: float = 0.4
     reward_weights: dict = field(default_factory=default_reward_weights)
 
     # --- curriculum ----------------------------------------------------

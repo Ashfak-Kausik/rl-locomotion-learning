@@ -105,6 +105,31 @@ def joint_limits(joint_pos, lower, upper, soft_ratio=0.9):
     return -float(np.sum(excess))
 
 
+def forward_progress(cmd_vx, actual_vx):
+    """
+    Linear, NON-SATURATING reward for moving toward the commanded speed.
+
+    tracking_lin_vel's exponential kernel exp(-err^2/sigma^2) is the right
+    shape near the target but goes flat far from it -- at sigma=0.25 a
+    stationary robot commanded to 0.5 m/s scores 0.018 with a gradient of
+    0.29, so it can barely feel which way to improve. That is precisely how
+    a policy gets stuck standing still: the objective term contributes ~4%
+    of its reward and offers almost no gradient, while `alive` pays out in
+    full for doing nothing (measured on multigait_v4: alive 0.500/step,
+    tracking_lin_vel 0.029/step).
+
+    This term is linear in achieved velocity, so its gradient is constant
+    all the way from zero -- it always pays to move faster, right up to the
+    commanded speed. Clipped at 1.0 so it cannot reward overshooting, and
+    floored at 0 so reversing is simply worth nothing rather than being
+    doubly punished (lateral_drift and the tracking terms already handle
+    wrong-direction motion).
+    """
+    if abs(cmd_vx) < 1e-6:
+        return 0.0
+    return float(np.clip(actual_vx / cmd_vx, 0.0, 1.0))
+
+
 def alive():
     """Constant bonus per surviving step — offsets the penalty terms so that
     standing still is better than falling over immediately."""
