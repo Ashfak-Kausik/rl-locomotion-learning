@@ -7,9 +7,11 @@ a plain dict rather than being scattered through the env.
 
 Device handling lives here too: `resolve_device()` turns "auto" into a real
 device and explains itself, and `tune_for_device()` scales the PPO update to
-match whichever one you got.
+match whichever one you got. The per-machine numbers it applies live in
+`tune_profiles.py`.
 """
 
+import os
 from dataclasses import dataclass, field
 
 
@@ -137,23 +139,31 @@ class Config:
     log_every_updates: int = 1
 
     # --- GPU -----------------------------------------------------------
-    # Scale the PPO update up when a GPU is present. The bottleneck differs
-    # by device: on CPU it is MuJoCo stepping, on GPU it is kernel-launch
-    # overhead, so bigger minibatches and more envs pay off there and cost
-    # you on CPU. Applied by tune_for_device().
-    gpu_num_envs: int = 32
-    gpu_rollout_steps: int = 64
-    # steps_per_update = gpu_num_envs * gpu_rollout_steps = 2048. This MUST
-    # stay strictly smaller than that, or "minibatch" silently becomes the
-    # entire batch and update_epochs collapses into repeated full-batch
-    # gradient steps with zero stochastic-minibatch diversity between them --
-    # exactly the PPO anti-pattern that produces sustained high clip-fraction
-    # and KL blowups. Found by a real run: clip_fraction sat at 0.3-0.7 and
-    # return oscillated wildly (14 -> 673 -> -181 -> 456 ...) for its entire
-    # duration when this was 2048 == batch size. 512 gives 4 minibatches/
-    # epoch, standard PPO practice, at negligible extra kernel-launch cost on
-    # a GPU this small.
-    gpu_minibatch_size: int = 512
+    # num_envs / rollout_steps / minibatch_size are overwritten by
+    # tune_for_device() using the machine-specific numbers in
+    # tune_profiles.py. They used to be hardcoded here as gpu_num_envs=32 /
+    # gpu_minibatch_size=512, which are the MEASURED values for an RTX 3050
+    # + 8-core i7-9700K -- and were then applied unchanged to every other
+    # CUDA device, including 4 GB cards that cannot fit them and Arc cards
+    # that never got here at all. Set by tune_for_device() for the record.
+    tune_profile: str = ""
+    # Explicit CLI overrides, honoured by tune_for_device(). Before these
+    # existed, `--num-envs 4` was accepted, printed, and then silently
+    # overwritten by the GPU tuning block a few lines later -- the flag did
+    # nothing at all on a GPU box.
+    num_envs_override: int = 0
+    minibatch_size_override: int = 0
+    # The one sizing rule that must never be broken, wherever the numbers
+    # come from: minibatch_size MUST stay strictly smaller than
+    # num_envs * rollout_steps, or "minibatch" silently becomes the entire
+    # batch and update_epochs collapses into repeated full-batch gradient
+    # steps with zero stochastic-minibatch diversity between them -- exactly
+    # the PPO anti-pattern that produces sustained high clip-fraction and KL
+    # blowups. Found by a real run: clip_fraction sat at 0.3-0.7 and return
+    # oscillated wildly (14 -> 673 -> -181 -> 456 ...) for its entire duration
+    # when minibatch_size == batch size. TuneProfile.validate() now enforces
+    # this for every profile, so the mistake cannot be reintroduced.
+    #
     # TF32 is OFF by default despite being faster on Ampere+. Measured: it
     # makes the FIRST minibatch of a PPO update report approx_kl = 0.0014
     # (max |dlogp| = 0.30 on individual samples) where the exact answer is
@@ -200,14 +210,37 @@ def resolve_device(requested="auto", verbose=True):
         if verbose:
             print(f"[device] {msg}")
 
-    available = torch.cuda.is_available()
+    cuda_ok = torch.cuda.is_available()
+    xpu_ok = bool(getattr(torch, "xpu", None) and torch.xpu.is_available())
+    mps_ok = bool(getattr(torch.backends, "mps", None)
+                  and torch.backends.mps.is_available())
     built_with_cuda = torch.version.cuda is not None
 
     if requested == "cpu":
         say(f"using CPU by request ({torch.get_num_threads()} threads)")
         return torch.device("cpu")
 
-    if available:
+    # Explicit non-CUDA accelerators. Intel Arc in particular used to be
+    # invisible here: `torch.cuda.is_available()` is False on an Arc box, so
+    # every Arc contributor silently got CPU with no warning at all.
+    if requested == "xpu" or (requested == "auto" and xpu_ok and not cuda_ok):
+        if xpu_ok:
+            say(f"using XPU: {torch.xpu.get_device_name(0)}")
+            return torch.device("xpu")
+        say("WARNING: --device xpu requested but torch.xpu is unavailable. "
+            "Intel Arc needs the XPU wheel:\n"
+            "           ./scripts/setup_env.sh --xpu")
+        say("falling back to CPU — this will be MUCH slower")
+        return torch.device("cpu")
+
+    if requested == "mps" or (requested == "auto" and mps_ok and not cuda_ok):
+        if mps_ok:
+            say("using MPS (Apple Silicon)")
+            return torch.device("mps")
+        say("WARNING: --device mps requested but unavailable")
+        return torch.device("cpu")
+
+    if cuda_ok:
         idx = torch.cuda.current_device()
         name = torch.cuda.get_device_name(idx)
         cap = torch.cuda.get_device_capability(idx)
@@ -231,36 +264,132 @@ def resolve_device(requested="auto", verbose=True):
         say("falling back to CPU — this will be MUCH slower")
     else:
         say(f"no GPU available, using CPU. {reason}")
+        # A GPU that exists but is unusable is worth naming explicitly —
+        # otherwise the only symptom is a run that is 40x slower than
+        # expected and nobody notices for three hours.
+        _warn_about_unusable_gpu(say)
 
     return torch.device("cpu")
 
 
-def tune_for_device(cfg, device):
+def _warn_about_unusable_gpu(say):
+    """If lspci sees a GPU that torch cannot use, say so by vendor."""
+    import shutil
+    import subprocess
+    if not shutil.which("lspci"):
+        return
+    try:
+        out = subprocess.run(["lspci"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except Exception:
+        return
+    lines = [ln for ln in out.splitlines()
+             if any(k in ln for k in ("VGA", "3D controller", "Display"))]
+    if any("Intel" in ln and "Arc" in ln for ln in lines):
+        say("NOTE: an Intel Arc GPU is present but torch cannot use it. "
+            "Install the XPU wheel: ./scripts/setup_env.sh --xpu")
+    elif any("NVIDIA" in ln for ln in lines):
+        say("NOTE: an NVIDIA GPU is present but torch cannot use it. "
+            "Run `python scripts/gpu_check.py` for a diagnosis.")
+
+
+def tune_for_device(cfg, device, profile_name=None):
     """
-    Scale the PPO update to the device.
+    Scale the PPO update to the machine.
 
     CPU: MuJoCo stepping dominates, so keep envs and minibatches small.
     GPU: kernel-launch overhead dominates, so batch aggressively — a 2048-row
     minibatch costs a 3050 barely more than a 128-row one.
 
-    Mutates and returns cfg. Only touches values the user did not override.
+    The actual numbers live in `tune_profiles.py`, keyed on backend, VRAM and
+    core count, because they were measured on one specific machine and are
+    wrong on others. This used to apply the RTX 3050 numbers to any CUDA
+    device, including 4 GB cards that cannot fit them.
+
+    `profile_name` forces a specific profile (train.py --tune-profile).
+
+    Mutates and returns cfg.
     """
     import torch
 
-    if device.type != "cuda":
-        return cfg
+    import tune_profiles
 
-    cfg.num_envs = cfg.gpu_num_envs
-    cfg.rollout_steps = cfg.gpu_rollout_steps
-    cfg.minibatch_size = cfg.gpu_minibatch_size
+    if profile_name:
+        if profile_name not in tune_profiles.BY_NAME:
+            raise SystemExit(
+                f"unknown tuning profile {profile_name!r}. Available: "
+                f"{', '.join(sorted(tune_profiles.BY_NAME))}")
+        profile = tune_profiles.BY_NAME[profile_name]
+        print(f"[device] tuning profile forced: {profile.name}")
+    else:
+        vram = name = None
+        if device.type == "cuda" and torch.cuda.is_available():
+            idx = torch.cuda.current_device()
+            vram = torch.cuda.get_device_properties(idx).total_memory / 1e9
+            name = torch.cuda.get_device_name(idx)
+        elif device.type == "xpu" and getattr(torch, "xpu", None):
+            name = torch.xpu.get_device_name(0)
+            try:
+                vram = torch.xpu.get_device_properties(0).total_memory / 1e9
+            except Exception:
+                pass
+        profile = tune_profiles.select(
+            backend=device.type, vram_gb=vram, gpu_name=name,
+            logical_cores=os.cpu_count(),
+        )
 
-    if cfg.tf32:
+    problems = profile.validate()
+    if problems:
+        raise SystemExit(f"tuning profile {profile.name} is invalid: "
+                         + "; ".join(problems))
+
+    cfg.num_envs = profile.num_envs
+    cfg.rollout_steps = profile.rollout_steps
+    cfg.minibatch_size = profile.minibatch_size
+    cfg.tf32 = profile.tf32
+    cfg.tune_profile = profile.name
+
+    # Explicit CLI overrides win over the profile, and re-derive the
+    # minibatch so the "never full-batch" rule survives the override.
+    if cfg.num_envs_override:
+        cfg.num_envs = cfg.num_envs_override
+        batch = cfg.num_envs * cfg.rollout_steps
+        if cfg.minibatch_size >= batch:
+            cfg.minibatch_size = max(32, batch // 4)
+            print(f"[device] --num-envs {cfg.num_envs} shrank the batch to "
+                  f"{batch}; minibatch reduced to {cfg.minibatch_size} to "
+                  f"keep it a real minibatch")
+    if cfg.minibatch_size_override:
+        cfg.minibatch_size = cfg.minibatch_size_override
+
+    batch = cfg.num_envs * cfg.rollout_steps
+    if cfg.minibatch_size >= batch:
+        raise SystemExit(
+            f"minibatch_size {cfg.minibatch_size} >= batch {batch}. This "
+            f"silently turns PPO into full-batch gradient descent and has "
+            f"already cost this project one multi-hour run; refusing to "
+            f"start.")
+
+    if profile.torch_threads:
+        torch.set_num_threads(profile.torch_threads)
+
+    if cfg.tf32 and device.type == "cuda":
         # TF32 matmuls on Ampere+: ~same accuracy for RL, materially faster.
+        # Off by default — see the tf32 comment on Config.
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
 
-    print(f"[device] tuned for GPU: num_envs={cfg.num_envs} "
+    tag = "measured" if profile.measured else "ESTIMATED, unbenchmarked"
+    print(f"[device] tuning profile: {profile.name} ({tag})")
+    print(f"[device]   num_envs={cfg.num_envs} "
           f"rollout_steps={cfg.rollout_steps} "
-          f"minibatch={cfg.minibatch_size} tf32={cfg.tf32}")
+          f"minibatch={cfg.minibatch_size} "
+          f"({profile.minibatches_per_epoch} minibatches/epoch) "
+          f"tf32={cfg.tf32}")
+    if not profile.measured:
+        print("[device]   this profile is a conservative guess for your "
+              "hardware. If it")
+        print("[device]   works, record it: python scripts/hw_profile.py "
+              "--save")
     return cfg

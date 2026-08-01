@@ -114,7 +114,7 @@ class Trainer:
         # Resolve "auto" to a real device, say why, and scale the PPO update
         # to match it. Never silently falls back to a 40x slower run.
         self.device = resolve_device(cfg.device)
-        tune_for_device(cfg, self.device)
+        tune_for_device(cfg, self.device, profile_name=cfg.tune_profile or None)
         torch.manual_seed(cfg.seed)
         np.random.seed(cfg.seed)
 
@@ -536,9 +536,16 @@ def main():
     ap.add_argument("--timesteps", type=int, default=None)
     ap.add_argument("--num-envs", type=int, default=None)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
+    ap.add_argument("--device", default="auto",
+                    choices=["auto", "cpu", "cuda", "xpu", "mps"],
                     help="auto (default) uses the GPU if one is usable, "
-                         "and says so either way")
+                         "and says so either way. xpu = Intel Arc, "
+                         "mps = Apple Silicon")
+    ap.add_argument("--minibatch-size", type=int, default=None)
+    ap.add_argument("--tune-profile", default=None,
+                    help="force a PPO sizing profile from tune_profiles.py "
+                         "instead of detecting one "
+                         "(list them: python tune_profiles.py --all)")
     ap.add_argument("--resume", default=None, metavar="CHECKPOINT.pt")
     ap.add_argument("--no-curriculum", action="store_true",
                     help="pin level 0 — use when debugging the reward function")
@@ -553,6 +560,11 @@ def main():
         cfg.total_timesteps = args.timesteps
     if args.num_envs is not None:
         cfg.num_envs = args.num_envs
+        cfg.num_envs_override = args.num_envs
+    if args.minibatch_size is not None:
+        cfg.minibatch_size_override = args.minibatch_size
+    if args.tune_profile is not None:
+        cfg.tune_profile = args.tune_profile
     if args.adapt_steps is not None:
         cfg.adapt_steps = args.adapt_steps
     if args.no_curriculum:

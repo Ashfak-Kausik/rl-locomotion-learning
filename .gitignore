@@ -33,6 +33,9 @@ stage3-go2-training/runs/
 .idea/
 .DS_Store
 
+# --- Agent tooling (local skills / Claude Code state) -----------------------
+.claude/
+
 # Local demo renders (large, regenerable) -- wherever make_video.py is run from
 /demo_videos/
 *.mp4

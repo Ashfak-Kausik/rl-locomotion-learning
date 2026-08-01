@@ -196,7 +196,7 @@ def check_system():
                "not installed — needed only for the container workflow",
                required=False)
 
-    check_nvidia(layer)
+    check_gpu(layer)
 
 
 def _nvidia_versions():
@@ -239,15 +239,10 @@ def _nvidia_versions():
     return loaded, userspace
 
 
-def check_nvidia(layer):
-    """
-    GPU is genuinely optional — Stages 1-2 are CPU-only by design. It matters
-    for Stage 3 training. When it IS broken, say precisely how.
-    """
+def _check_nvidia(layer):
+    """NVIDIA path of check_gpu. Returns True if a usable NVIDIA GPU was found."""
     if not shutil.which("nvidia-smi"):
-        record(layer, "nvidia gpu", "info",
-               "none detected — fine, Stages 1-2 are CPU-only", required=False)
-        return
+        return False
 
     probe = subprocess.run(
         ["nvidia-smi", "--query-gpu=name,driver_version,memory.total",
@@ -257,7 +252,7 @@ def check_nvidia(layer):
     if probe.returncode == 0 and probe.stdout.strip():
         record(layer, "nvidia gpu", "ok",
                probe.stdout.strip().replace("\n", " | "), required=False)
-        return
+        return True
 
     # Failing. Work out whether it is the classic version mismatch.
     loaded, userspace = _nvidia_versions()
@@ -276,6 +271,118 @@ def check_nvidia(layer):
                f"nvidia-smi failing ({err[0] if err else 'unknown'}). "
                "Stages 1-2 are CPU-only and unaffected.",
                required=False)
+    # Present-but-broken still counts as "found" so we don't also claim
+    # "no GPU" for Intel/AMD on the same machine.
+    return True
+
+
+def _check_intel_xpu(layer):
+    """Intel Arc / XPU. Prefer torch.xpu when installed; fall back to lspci."""
+    try:
+        import torch
+        if hasattr(torch, "xpu") and torch.xpu.is_available():
+            n = torch.xpu.device_count()
+            names = []
+            for i in range(n):
+                try:
+                    names.append(torch.xpu.get_device_name(i))
+                except Exception:
+                    names.append(f"xpu:{i}")
+            record(layer, "intel xpu", "ok",
+                   f"{n} device(s): {', '.join(names)}", required=False)
+            return True
+    except Exception:
+        pass
+
+    # No torch.xpu — still report if Arc hardware is present so the
+    # contributor knows to run `./scripts/setup_env.sh --xpu`.
+    if shutil.which("lspci"):
+        try:
+            out = subprocess.run(["lspci"], capture_output=True, text=True,
+                                 timeout=5).stdout
+        except Exception:
+            out = ""
+        hits = [ln for ln in out.splitlines()
+                if re.search(r"VGA|3D|Display", ln, re.I)
+                and re.search(r"Intel.*(Arc|DG2|Battlemage|Alchemist)", ln, re.I)]
+        if hits:
+            record(layer, "intel xpu", "warn",
+                   f"Arc hardware present ({hits[0].split(':', 1)[-1].strip()}) "
+                   "but torch.xpu unavailable — run "
+                   "./scripts/setup_env.sh --xpu",
+                   required=False)
+            return True
+    return False
+
+
+def _check_amd_rocm(layer):
+    """AMD ROCm via rocm-smi, or torch.hip if the wheel is installed."""
+    if shutil.which("rocm-smi"):
+        probe = subprocess.run(
+            ["rocm-smi", "--showproductname"],
+            capture_output=True, text=True, timeout=10,
+        )
+        detail = (probe.stdout or probe.stderr or "").strip().splitlines()
+        detail = next((ln for ln in detail if ln.strip()), "rocm-smi present")
+        status = "ok" if probe.returncode == 0 else "warn"
+        record(layer, "amd rocm", status, detail, required=False)
+        return True
+    try:
+        import torch
+        if getattr(torch.version, "hip", None):
+            record(layer, "amd rocm", "ok",
+                   f"HIP {torch.version.hip} | cuda-api avail: "
+                   f"{torch.cuda.is_available()}",
+                   required=False)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _check_apple_mps(layer):
+    """Apple Silicon MPS — only meaningful on Darwin arm64."""
+    if platform.system() != "Darwin":
+        return False
+    try:
+        import torch
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            record(layer, "apple mps", "ok",
+                   "Metal Performance Shaders available", required=False)
+            return True
+        if platform.machine() == "arm64":
+            record(layer, "apple mps", "warn",
+                   "Apple Silicon detected but torch MPS unavailable",
+                   required=False)
+            return True
+    except Exception:
+        if platform.machine() == "arm64":
+            record(layer, "apple mps", "info",
+                   "Apple Silicon — install torch to use MPS", required=False)
+            return True
+    return False
+
+
+def check_gpu(layer):
+    """
+    GPU is genuinely optional — Stages 1-2 are CPU-only by design. It matters
+    for Stage 3 training. Probe every vendor we support so an Arc/ROCm/MPS
+    machine is not silently reported as "no GPU, fine".
+    """
+    found = False
+    found = _check_nvidia(layer) or found
+    found = _check_intel_xpu(layer) or found
+    found = _check_amd_rocm(layer) or found
+    found = _check_apple_mps(layer) or found
+    if not found:
+        record(layer, "gpu", "info",
+               "none detected — fine, Stages 1-2 are CPU-only. "
+               "For Stage 3 see ./scripts/setup_env.sh --gpu auto",
+               required=False)
+
+
+# Back-compat alias — older docs / callers may still name check_nvidia.
+check_nvidia = check_gpu
 
 
 # ============================================================================
@@ -314,14 +421,24 @@ def check_python_packages():
             ver = "?"
         record(layer, dist_name, "ok", f"{ver} — {why}", required=required)
 
-    # Torch build flavour: CUDA wheels are ~2.5 GB and pointless on a
-    # CPU-only box, so surface which one is installed.
+    # Torch build flavour: CUDA/XPU/ROCm wheels are ~2.5 GB and pointless on a
+    # CPU-only box, so surface which one is installed and what it can see.
     try:
         import torch
-        flavour = (f"CUDA {torch.version.cuda}"
-                   if getattr(torch.version, "cuda", None) else "CPU-only")
+        if getattr(torch.version, "cuda", None):
+            flavour = f"CUDA {torch.version.cuda}"
+        elif getattr(torch.version, "hip", None):
+            flavour = f"ROCm/HIP {torch.version.hip}"
+        else:
+            flavour = "CPU-only"
+        backends = [
+            f"cuda={torch.cuda.is_available()}",
+            f"xpu={hasattr(torch, 'xpu') and torch.xpu.is_available()}",
+        ]
+        if hasattr(torch.backends, "mps"):
+            backends.append(f"mps={torch.backends.mps.is_available()}")
         record(layer, "torch build", "info",
-               f"{flavour} | cuda available: {torch.cuda.is_available()} "
+               f"{flavour} | {' '.join(backends)} "
                f"| threads: {torch.get_num_threads()}", required=False)
     except Exception:
         pass

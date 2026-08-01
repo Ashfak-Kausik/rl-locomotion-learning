@@ -6,16 +6,22 @@
 #
 #   1. Native OS packages   (apt / dnf / pacman / zypper / brew — auto-detected)
 #   2. A project virtualenv (.venv) with a matching Python
-#   3. All Python packages  (CPU-only PyTorch by default — see --cuda)
+#   3. All Python packages  (PyTorch flavour chosen for your GPU — see --gpu)
 #   4. Verifies the result  (delegates to scripts/check_env.py)
 #
 # Usage:
 #   ./scripts/setup_env.sh                 # check, prompt, then install
 #   ./scripts/setup_env.sh --yes           # non-interactive (CI / Docker)
 #   ./scripts/setup_env.sh --check-only    # report only, change nothing
-#   ./scripts/setup_env.sh --cuda          # CUDA PyTorch instead of CPU
+#   ./scripts/setup_env.sh --gpu auto      # detect the GPU, pick the wheel
+#   ./scripts/setup_env.sh --cuda          # NVIDIA CUDA PyTorch
+#   ./scripts/setup_env.sh --xpu           # Intel Arc (XPU) PyTorch
+#   ./scripts/setup_env.sh --rocm          # AMD ROCm PyTorch
 #   ./scripts/setup_env.sh --no-system     # skip OS packages (no sudo)
 #   ./scripts/setup_env.sh --python 3.12   # pick the interpreter
+#
+# The default is CPU-only PyTorch (~200 MB vs ~2.5 GB) because Stages 1-2 are
+# CPU-only by design. Only Stage 3 training wants a GPU.
 #
 # Safe to re-run: every step is idempotent.
 # ============================================================================
@@ -23,11 +29,19 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="${REPO_ROOT}/.venv"
+
+# Pinned index URLs. `--cuda` used to run a bare `pip install torch>=2.4,<3`
+# with NO index-url, which silently gave you whatever CUDA build PyPI happened
+# to default to — not necessarily one matching your driver, and not the cu130
+# build this project is verified against.
 TORCH_CPU_INDEX="https://download.pytorch.org/whl/cpu"
+TORCH_CUDA_INDEX="https://download.pytorch.org/whl/cu130"
+TORCH_XPU_INDEX="https://download.pytorch.org/whl/xpu"
+TORCH_ROCM_INDEX="https://download.pytorch.org/whl/rocm6.2"
 
 ASSUME_YES=0
 CHECK_ONLY=0
-WANT_CUDA=0
+TORCH_FLAVOUR="cpu"        # cpu | cuda | xpu | rocm | auto
 SKIP_SYSTEM=0
 PYTHON_BIN=""
 
@@ -35,14 +49,23 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --yes|-y)      ASSUME_YES=1 ;;
     --check-only)  CHECK_ONLY=1 ;;
-    --cuda)        WANT_CUDA=1 ;;
+    --cuda)        TORCH_FLAVOUR="cuda" ;;
+    --xpu|--arc)   TORCH_FLAVOUR="xpu" ;;
+    --rocm)        TORCH_FLAVOUR="rocm" ;;
+    --gpu)         TORCH_FLAVOUR="$2"; shift ;;
     --no-system)   SKIP_SYSTEM=1 ;;
     --python)      PYTHON_BIN="python$2"; shift ;;
-    -h|--help)     sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)     sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
 done
+
+case "$TORCH_FLAVOUR" in
+  cpu|cuda|xpu|rocm|auto|none) ;;
+  *) echo "unknown --gpu value: $TORCH_FLAVOUR (cpu|cuda|xpu|rocm|auto)" >&2
+     exit 2 ;;
+esac
 
 # --- pretty output ----------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -87,6 +110,39 @@ ok "OS: ${DISTRO}"
 
 SUDO=""
 if [[ $EUID -ne 0 ]] && command -v sudo >/dev/null; then SUDO="sudo"; fi
+
+# --- GPU detection ----------------------------------------------------------
+# Resolves --gpu auto to a real wheel flavour. Kept in shell (rather than
+# deferring to scripts/hw_profile.py) because this runs BEFORE python packages
+# exist, so it cannot import torch or anything else.
+detect_gpu_flavour() {
+  if command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1; then
+    echo cuda; return
+  fi
+  if command -v rocm-smi >/dev/null; then echo rocm; return; fi
+  if command -v lspci >/dev/null; then
+    # Intel Arc discrete only. Integrated UHD/Iris is detected by the same
+    # pattern but is not worth a 2 GB wheel for Stage 3 training.
+    if lspci 2>/dev/null | grep -Ei 'VGA|3D controller|Display' \
+         | grep -qiE 'Intel.*(Arc|DG2|Battlemage|Alchemist)'; then
+      echo xpu; return
+    fi
+    if lspci 2>/dev/null | grep -Ei 'VGA|3D controller' | grep -qi NVIDIA; then
+      echo cuda; return
+    fi
+  fi
+  if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+    echo mps; return
+  fi
+  echo cpu
+}
+
+if [[ "$TORCH_FLAVOUR" == "auto" ]]; then
+  TORCH_FLAVOUR="$(detect_gpu_flavour)"
+  # mps ships in the standard macOS wheel; no special index needed.
+  [[ "$TORCH_FLAVOUR" == "mps" ]] && TORCH_FLAVOUR="cpu"
+  ok "detected GPU flavour: ${TORCH_FLAVOUR}"
+fi
 
 # ============================================================================
 step "2/5  Native OS packages"
@@ -191,16 +247,31 @@ else
   python -m pip install --upgrade pip setuptools wheel --quiet
   ok "pip $(python -m pip --version | awk '{print $2}')"
 
-  # PyTorch first, from the CPU index unless --cuda. Doing it in a separate
-  # step stops pip from pulling the ~2.5 GB CUDA wheel as a transitive dep.
-  if [[ $WANT_CUDA -eq 1 ]]; then
-    info "installing CUDA PyTorch (large download)"
-    python -m pip install "torch>=2.4,<3"
-  else
-    info "installing CPU-only PyTorch from ${TORCH_CPU_INDEX}"
-    python -m pip install "torch>=2.4,<3" --index-url "$TORCH_CPU_INDEX"
-  fi
-  ok "torch installed"
+  # PyTorch first, from the flavour-specific index. Doing it in a separate
+  # step stops pip from pulling the wrong ~2.5 GB wheel as a transitive dep
+  # of something else in requirements.txt.
+  case "$TORCH_FLAVOUR" in
+    cuda)
+      info "installing CUDA PyTorch from ${TORCH_CUDA_INDEX} (large download)"
+      python -m pip install "torch>=2.4,<3" --index-url "$TORCH_CUDA_INDEX"
+      ;;
+    xpu)
+      info "installing Intel XPU PyTorch from ${TORCH_XPU_INDEX} (large download)"
+      python -m pip install "torch>=2.4,<3" --index-url "$TORCH_XPU_INDEX"
+      ;;
+    rocm)
+      info "installing ROCm PyTorch from ${TORCH_ROCM_INDEX} (large download)"
+      python -m pip install "torch>=2.4,<3" --index-url "$TORCH_ROCM_INDEX"
+      ;;
+    none)
+      info "skipping torch install (--gpu none)"
+      ;;
+    *)
+      info "installing CPU-only PyTorch from ${TORCH_CPU_INDEX}"
+      python -m pip install "torch>=2.4,<3" --index-url "$TORCH_CPU_INDEX"
+      ;;
+  esac
+  [[ "$TORCH_FLAVOUR" != "none" ]] && ok "torch installed (${TORCH_FLAVOUR})"
 
   info "installing the rest of requirements.txt"
   python -m pip install -r "${REPO_ROOT}/requirements.txt"

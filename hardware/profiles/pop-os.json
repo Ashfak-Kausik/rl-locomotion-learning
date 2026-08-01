@@ -1,0 +1,50 @@
+{
+  "backend": "cuda",
+  "cpu": {
+    "arch": "x86_64",
+    "cores_logical": 8,
+    "cores_physical": 8,
+    "max_mhz": 4900.0,
+    "model": "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz",
+    "smt": false
+  },
+  "gpus": [
+    {
+      "backend": "cuda",
+      "compute_cap": "8.6",
+      "driver": "580.173.02",
+      "name": "NVIDIA GeForce RTX 3050",
+      "vendor": "nvidia",
+      "vram_gb": 8.0
+    }
+  ],
+  "hostname": "pop-os",
+  "kernel": "7.0.11-76070011-generic",
+  "memory": {
+    "available_gb": 25.8,
+    "swap_gb": 20.0,
+    "total_gb": 47.0
+  },
+  "os": "Pop!_OS 24.04 LTS",
+  "python": "3.12.3",
+  "torch": {
+    "arch_list": [
+      "sm_75",
+      "sm_80",
+      "sm_86",
+      "sm_90",
+      "sm_100",
+      "sm_120"
+    ],
+    "arch_prebuilt": true,
+    "compute_cap": "sm_86",
+    "cuda_available": true,
+    "cuda_build": "13.0",
+    "device_name": "NVIDIA GeForce RTX 3050",
+    "installed": true,
+    "mps_available": false,
+    "threads": 8,
+    "version": "2.13.0+cu130",
+    "xpu_available": false
+  }
+}
