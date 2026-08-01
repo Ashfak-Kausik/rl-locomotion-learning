@@ -437,8 +437,9 @@ The drift guard deserves note: the duplication in §8.1 is deliberate, so it
 cannot be eliminated — but it *can* be made safe. Parsing the constants out of
 each file and asserting equality converts a silent divergence into a red test.
 
-CI (`.github/workflows/ci.yml`) runs these on Python 3.10 and 3.12, plus the
-Docker image, plus reproducibility checks, on every push.
+Run locally before any change: `make test` (~3 s, no policy weights). There is
+no CI workflow in this repo any more — verification is `make test`,
+`python scripts/check_env.py`, and `python stage3-go2-training/train.py --smoke`.
 
 ### 8.3 Hardcoded sweep parameters
 

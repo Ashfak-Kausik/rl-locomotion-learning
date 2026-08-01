@@ -167,9 +167,9 @@ rl-locomotion-learning/
 │   └── test_stage3_contract.py      Stage 3 → Stage 2 round-trip
 │
 ├── docs/                            ← this documentation set
-├── scripts/                         ← setup_env.sh, check_env.py
+├── scripts/                         ← setup_env.sh, check_env.py, hw_profile.py
+├── hardware/profiles/               ← committed per-machine CPU/GPU records
 ├── docker/                          ← Dockerfile, compose.yaml, entrypoint.sh
-├── .github/workflows/ci.yml         ← tests, reproducibility, round-trip, Docker
 └── media/                           Demo GIFs used by the READMEs
 ```
 

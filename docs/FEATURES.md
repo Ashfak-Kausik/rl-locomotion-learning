@@ -240,8 +240,11 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | Feature | Status | Where |
 |---|---|---|
 | Dependency manifest | ✅ | `requirements.txt` |
-| Cross-distro auto-installer | ✅ | `scripts/setup_env.sh` |
-| 4-layer environment verifier | ✅ | `scripts/check_env.py` |
+| Cross-distro auto-installer | ✅ | `scripts/setup_env.sh` — `--gpu auto/cuda/xpu/rocm` |
+| 4-layer environment verifier | ✅ | `scripts/check_env.py` — NVIDIA / Arc / ROCm / MPS aware |
+| Hardware profile recorder | ✅ | `scripts/hw_profile.py`, `make hw-profile` / `hw-check` |
+| Per-GPU PPO tune profiles | ✅ | `stage3-go2-training/tune_profiles.py` |
+| Checkpoint reward diagnosis | ✅ | `stage3-go2-training/diagnose.py` |
 | Machine-independent paths | ✅ | `paths.py` |
 | Docker image (CPU-only) | ✅ | `docker/Dockerfile` |
 | Compose: interactive shell | ✅ | `lab` |
@@ -254,9 +257,7 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | `.gitignore` for large artefacts | ✅ | rewritten |
 | `.dockerignore` | ✅ | — |
 | Automated tests | ✅ | `tests/` — 93 tests, ~3 s, no policy weights |
-| CI pipeline | ✅ | `.github/workflows/ci.yml` — py3.10 + 3.12, plus Docker |
-| Reproducibility check in CI | ✅ | figures + byte-identical scene regeneration |
-| Stage 3 round-trip check in CI | ✅ | export → harness, every push |
+| CI pipeline | ❌ | removed — use `make test` / `check_env.py` locally |
 | Make targets for tests + Stage 3 | ✅ | `make test`, `make train-smoke`, `make export` |
 | **Dependency lockfile** | ❌ | ranges only, no hashes |
 

@@ -204,25 +204,26 @@ access. So:
 
 ### Using your local GPU
 
-The trainer picks its device automatically and says so:
+The trainer picks its device automatically and says so. **NVIDIA, Intel Arc
+(XPU), AMD ROCm, and Apple MPS** are all recognised — see
+[`docs/DEPENDENCIES.md` §4.1](../docs/DEPENDENCIES.md#41-gpu-flavours--nvidia-intel-arc-amd-apple)
+for the install command on each.
 
 ```bash
-make gpu                                    # is the GPU usable at all?
+./scripts/setup_env.sh --gpu auto           # matching torch wheel
+make hw-profile                             # record this machine
+python train.py --smoke                     # both RMA phases, tiny budget
 python train.py --run-name v1               # --device auto is the default
-python train.py --run-name v1 --device cuda # insist, and warn loudly if not
+python train.py --run-name v1 --device xpu  # insist on Arc; warns if missing
+python train.py --tune-profile arc-16gb     # force a sizing profile
 ```
 
-`config.resolve_device()` never falls back silently — asking for `cuda` and
-getting `cpu` without noticing is how you discover three hours later that the
-run is 40x slower than expected. When a GPU is found, `tune_for_device()`
-rescales the PPO update, because the bottleneck moves:
-
-| | CPU | GPU |
-|---|---|---|
-| bottleneck | MuJoCo stepping | kernel-launch overhead |
-| `num_envs` | 8 | 32 |
-| `minibatch_size` | 128 | 2048 |
-| TF32 matmuls | n/a | enabled (Ampere+) |
+`config.resolve_device()` never falls back silently — asking for `cuda`/`xpu`
+and getting `cpu` without noticing is how you discover three hours later that
+the run is 40× slower than expected. When a device is found,
+`tune_for_device()` applies a named profile from `tune_profiles.py` (measured
+`rtx3050-8gb`; estimated `arc-*` / `cuda-*` / `apple-mps` / `cpu-*` until
+someone benchmarks).
 
 A local consumer GPU helps the PPO update, not the simulation — MuJoCo still
 steps on CPU here. Measured on an RTX 3050 (8 GB, sm_86):
@@ -244,7 +245,8 @@ a video-producing experiment sweep taking minutes and taking an hour. Worth
 knowing: EGL returns valid frames at *software* speed when it cannot load the
 driver, and raises nothing. The 6.6-vs-309 fps gap above was invisible until
 `gpu_check.py` started inspecting stderr for `driver (null)`. Verify with
-`make gpu` rather than assuming.
+`make gpu` rather than assuming (NVIDIA path); on Arc/AMD rely on
+`check_env.py` + `--smoke`.
 
 Checkpoints land in `stage3-go2-training/runs/<run-name>/` regardless of which
 directory you launch from — a relative `out_dir` is anchored to the stage

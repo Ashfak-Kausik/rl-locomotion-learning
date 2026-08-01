@@ -49,7 +49,7 @@ without the policy weights.
 
 | Document | Contents |
 |---|---|
-| **[DEPENDENCIES.md](DEPENDENCIES.md)** | Complete checklist, three install paths, what runs without the policy weights, troubleshooting table. |
+| **[DEPENDENCIES.md](DEPENDENCIES.md)** | Complete checklist, standalone bootstrap, GPU flavours (NVIDIA / Arc / ROCm / MPS), what runs without the policy weights, troubleshooting. |
 | **[NATIVE-SETUP.md](NATIVE-SETUP.md)** | Running on the host without Docker: exact package inventory, what to uninstall, verified commands, rendering-backend speeds. |
 | **[DOCKER.md](DOCKER.md)** | Four compose services, volume layout, rendering backends, file ownership, troubleshooting. |
 
@@ -84,10 +84,11 @@ without the policy weights.
 ### Commands
 
 ```bash
-./scripts/setup_env.sh              # install everything, verify
+./scripts/setup_env.sh --gpu auto       # install + matching torch; or omit --gpu for CPU
 source .venv/bin/activate
-python scripts/check_env.py         # 4-layer environment report
-make help                           # all convenience targets
+python scripts/check_env.py             # 4-layer environment report
+make hw-profile                         # record this machine
+make help                               # all convenience targets
 ```
 
 ```bash

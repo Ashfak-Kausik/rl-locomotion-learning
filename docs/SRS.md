@@ -314,7 +314,7 @@ real harness round-trip.
 |---|---|---|
 | NFR-4.1 | Constants centralised or documented where duplicated | ⚠️ still duplicated in `06`–`08`, but drift is now a **test failure** (`tests/test_constants.py`) |
 | NFR-4.2 | Automated tests guard the observation contract | ✅ 93 tests; `tests/test_obs_contract.py` pins every field boundary |
-| NFR-4.3 | CI verifies the environment on every push | ✅ `.github/workflows/ci.yml`, py3.10 + 3.12 + Docker |
+| NFR-4.3 | Local verification covers env + tests without a CI host | ✅ `make test`, `scripts/check_env.py`, `train.py --smoke` |
 | NFR-4.4 | Style enforced by a linter/formatter | ❌ not configured |
 | NFR-4.5 | Agentic coding tools have durable project context | ✅ `CLAUDE.md` |
 | NFR-4.6 | Tests runnable without the policy checkpoints | ✅ none of the 93 require them |
@@ -405,7 +405,7 @@ walks well, which is inherently a judgement about a simulation.
 | 3 | FR-4.1–4.9 | `stage3-go2-training/` | smoke run + export round-trip + 40 tests |
 | 3 | FR-4.10–4.11 | — | blocked on GPU compute |
 | Tests | NFR-4.2, 4.6 | `tests/` | 93 passing |
-| CI | NFR-4.3 | `.github/workflows/ci.yml` | runs on push |
+| Local verify | NFR-4.3 | `make test` / `check_env.py` / `--smoke` | run before push |
 | 4 | FR-5.\* | — | not implemented |
 | 5 | FR-6.\* | — | not implemented |
 | 6 | FR-7.\* | — | not implemented |

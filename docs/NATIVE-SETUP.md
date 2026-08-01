@@ -6,14 +6,18 @@ is still documented in [`DOCKER.md`](DOCKER.md) and remains valid, it is just
 not the route this machine takes.
 
 If you are setting up a *new* machine, do not follow this file by hand — run
-the bootstrap, which derives the same list and skips whatever is already
-present:
+the standalone bootstrap, which derives the same list and skips whatever is
+already present:
 
 ```bash
-./scripts/setup_env.sh          # OS packages + .venv + Python deps
+./scripts/setup_env.sh --gpu auto   # OS packages + .venv + matching torch
 source .venv/bin/activate
-python scripts/check_env.py     # 4-layer verification
+python scripts/check_env.py         # 4-layer verification
+make hw-profile                     # record this machine in hardware/profiles/
 ```
+
+GPU vendor matrix (NVIDIA / Intel Arc / AMD ROCm / Apple) and what to do on
+each: [`DEPENDENCIES.md` §4.1](DEPENDENCIES.md#41-gpu-flavours--nvidia-intel-arc-amd-apple).
 
 This file exists for the other question: *what did that actually put on my
 machine, and can I undo it?*
@@ -217,5 +221,8 @@ unaffected — prefer it for anything scripted.
 ## Related
 
 - [`DEPENDENCIES.md`](DEPENDENCIES.md) — the full checklist and why each item exists
+- [`DEPENDENCIES.md` §4.1](DEPENDENCIES.md#41-gpu-flavours--nvidia-intel-arc-amd-apple) — NVIDIA / Arc / ROCm / MPS install paths
 - [`DOCKER.md`](DOCKER.md) — the container route, if you change your mind
+- `hardware/profiles/` — committed machine records (`make hw-profile`)
+- `stage3-go2-training/tune_profiles.py` — per-backend PPO batch sizes
 - [`../stage3-go2-training/README.md`](../stage3-go2-training/README.md) — GPU tuning and measured speedups

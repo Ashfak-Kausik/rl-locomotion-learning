@@ -378,7 +378,7 @@ Not started; hardware-dependent.
 | Gap | Impact |
 |---|---|
 | ~~No tests~~ | **RESOLVED** — 93 tests, none needing policy weights |
-| ~~No CI workflow~~ | **RESOLVED** — `.github/workflows/ci.yml` |
+| ~~No CI workflow~~ | **RESOLVED then removed** — local `make test` / `check_env.py` instead |
 | No linter/formatter config | style drifts; unused imports survive (see R3) |
 | No logging module | everything is `print()`; fine for scripts, awkward for long sweeps |
 | No CLI argument parsing in exp1/2/3 | velocities, gaits and seeds are edited in source (Stage 3 scripts do have `argparse`) |

@@ -54,7 +54,12 @@ def default_reward_weights():
         "lateral_drift": 0.5,      # Exp 1 F1.3: baseline never penalised this
         "vertical_velocity": 0.5,
         "body_orientation": 1.0,
-        "body_height": 5.0,
+        # 5 -> 20. multigait_v5 learned to crouch to 0.21 m (front legs on
+        # the floor) because the squared-height penalty at weight 5 cost only
+        # ~0.04/step while standing still still paid ~0.66/step. At weight 20
+        # the same crouch costs ~0.16/step — enough to matter without
+        # overwhelming a real gait's tracking reward (~3/step at target).
+        "body_height": 20.0,
         # --- smoothness / energy ---------------------------------------
         "action_rate": 0.01,
         "action_magnitude": 0.001,
@@ -87,13 +92,15 @@ class Config:
     action_clip: float = 5.0
     domain_rand: bool = True
     fall_penalty: float = -10.0
-    # 0.25 -> 0.4. sigma sets how far from target the exponential kernel
-    # still has usable gradient. At 0.25, a stationary robot commanded to
-    # 0.5 m/s scores 0.018 with gradient 0.29 -- effectively flat, so it
-    # cannot tell that moving would help. At 0.4 the same state scores 0.210
-    # with gradient 1.31, a 4.5x stronger learning signal exactly where the
-    # policy was stuck.
-    tracking_sigma: float = 0.4
+    # Reverted 0.4 -> 0.25 after multigait_v5. Widening sigma was meant to
+    # give a stationary robot a usable gradient toward 0.5 m/s, but it also
+    # multiplied the standing-still payout by ~10x (exp(-0.5^2/0.4^2)=0.21
+    # vs exp(-0.5^2/0.25^2)=0.018). Measured on v5's "best" checkpoint:
+    # tracking_lin_vel alone was 45% of reward mass while body vx was 0.01
+    # m/s — standing WAS the optimum again. Keep sigma tight; rely on
+    # forward_progress (linear, non-saturating) for the far-from-target
+    # gradient instead.
+    tracking_sigma: float = 0.25
     reward_weights: dict = field(default_factory=default_reward_weights)
 
     # --- curriculum ----------------------------------------------------
