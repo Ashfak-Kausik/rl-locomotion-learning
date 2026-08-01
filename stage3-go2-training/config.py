@@ -138,7 +138,20 @@ class Config:
     # epoch, standard PPO practice, at negligible extra kernel-launch cost on
     # a GPU this small.
     gpu_minibatch_size: int = 512
-    tf32: bool = True            # Ampere+ tensor cores for fp32 matmuls
+    # TF32 is OFF by default despite being faster on Ampere+. Measured: it
+    # makes the FIRST minibatch of a PPO update report approx_kl = 0.0014
+    # (max |dlogp| = 0.30 on individual samples) where the exact answer is
+    # 0.0 -- same network, same data, ratio must be 1. The cause is
+    # batch-size-dependent kernel selection: rollouts are collected at
+    # batch=num_envs (32) and re-evaluated at batch=minibatch_size (512),
+    # and reduced-mantissa matmuls round differently. With tf32=False the
+    # same measurement gives exactly 0.000000.
+    #
+    # That numerical floor is not a policy change, but the KL guard cannot
+    # tell the difference. Once it exceeds target_kl the guard rejects every
+    # minibatch: multigait_v4 logged `rej 1/1` for its last ~10M steps and
+    # applied ZERO gradients while appearing to train normally.
+    tf32: bool = False
 
     def describe(self):
         lines = ["Config:"]

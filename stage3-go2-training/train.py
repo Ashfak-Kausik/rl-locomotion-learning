@@ -282,7 +282,17 @@ class Trainer:
                 # update destabilise the policy" should be judged on. Found
                 # the hard way: a printed kl of 35 turned out to include
                 # rejected-but-never-applied minibatches.
-                if cfg.target_kl and approx_kl.item() > cfg.target_kl:
+                # Never let an update apply NOTHING. If the very first
+                # minibatch trips the guard, training silently stops while
+                # still logging normally -- multigait_v4 sat at `rej 1/1`
+                # for its last ~10M steps, applying zero gradients. That is
+                # worse than one slightly-too-large step, because it is
+                # invisible. The first minibatch's true KL is 0 by
+                # construction anyway (same policy, same data); any non-zero
+                # reading is numerical noise, which is exactly what the
+                # tf32=False default addresses at source.
+                if (cfg.target_kl and approx_kl.item() > cfg.target_kl
+                        and applied_kls):
                     stop_early = True
                     n_rejected += 1
                     break
