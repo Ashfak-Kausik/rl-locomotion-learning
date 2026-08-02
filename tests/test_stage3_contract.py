@@ -345,15 +345,31 @@ def test_curriculum_starts_flat_and_escalates():
 def test_curriculum_promotes_and_demotes():
     from env.curriculum import Curriculum
 
-    c = Curriculum(window=5, promote_threshold=0.75, demote_threshold=0.30)
+    c = Curriculum(window=5, promote_threshold=0.75, demote_threshold=0.30,
+                   promote_min_body_vx=0.15, promote_min_distance_m=1.5)
     assert c.level_idx == 0
+    # High return but no movement must NOT promote (v4–v7 failure mode).
     for _ in range(5):
-        c.record(90.0, 100.0)          # 0.9 >= promote threshold
+        c.record(90.0, 100.0, distance_m=0.1, mean_body_vx=0.01)
+    assert c.level_idx == 0
+    # Return + real locomotion promotes.
+    for _ in range(5):
+        c.record(90.0, 100.0, distance_m=2.0, mean_body_vx=0.20)
     assert c.level_idx == 1
 
     for _ in range(5):
-        c.record(10.0, 100.0)          # 0.1 <= demote threshold
+        c.record(10.0, 100.0, distance_m=2.0, mean_body_vx=0.20)
     assert c.level_idx == 0
+
+
+def test_curriculum_promotes_on_distance_alone():
+    from env.curriculum import Curriculum
+
+    c = Curriculum(window=3, promote_threshold=0.5,
+                   promote_min_body_vx=0.15, promote_min_distance_m=1.5)
+    for _ in range(3):
+        c.record(50.0, 100.0, distance_m=2.0, mean_body_vx=0.05)
+    assert c.level_idx == 1
 
 
 def test_curriculum_disabled_pins_level_zero():

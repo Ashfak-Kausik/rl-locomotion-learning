@@ -18,7 +18,7 @@ DOCKER_ENV  := UID=$(shell id -u) GID=$(shell id -g)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup check gpu gpu-bench hw-profile hw-check test test-all clean clean-all \
-        train train-smoke export evaluate \
+        train train-smoke train-bench export evaluate \
         figures scenes hello inspect pose walk teleop \
         cartpole lunarlander pendulum tensorboard \
         exp1 exp2 exp3 experiments \
@@ -50,6 +50,9 @@ gpu:  ## Check whether the GPU is usable (run after a reboot) [no-policy]
 
 gpu-bench:  ## GPU readiness plus GPU-vs-CPU benchmarks [no-policy]
 	@$(PY) scripts/gpu_check.py --bench
+
+train-bench:  ## ~3 min Stage 3 throughput probe; read the sps column [no-policy]
+	cd $(STAGE3) && ../$(PY) train.py --run-name speed_probe --timesteps 200000 --device auto
 
 hw-profile:  ## Detect CPU/RAM/GPU and save hardware/profiles/<host>.json [no-policy]
 	@$(PY) scripts/hw_profile.py --save

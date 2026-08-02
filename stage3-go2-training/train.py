@@ -31,6 +31,7 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -108,6 +109,18 @@ class RolloutBuffer:
 # ===========================================================================
 # Trainer
 # ===========================================================================
+def _resolve_rollout_workers(requested, num_envs):
+    """
+    0 / None → auto = min(num_envs, cpu_count).
+    1 → serial (legacy path, useful for debugging race hypotheses).
+    N → clamp to [1, num_envs].
+    """
+    if requested is None or requested == 0:
+        cpus = os.cpu_count() or 1
+        return max(1, min(num_envs, cpus))
+    return max(1, min(int(requested), num_envs))
+
+
 class Trainer:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -132,6 +145,8 @@ class Trainer:
             enabled=cfg.curriculum,
             promote_threshold=cfg.promote_threshold,
             demote_threshold=cfg.demote_threshold,
+            promote_min_body_vx=cfg.promote_min_body_vx,
+            promote_min_distance_m=cfg.promote_min_distance_m,
             window=cfg.curriculum_window,
         )
 
@@ -143,6 +158,25 @@ class Trainer:
                    scene=self.curriculum.level.scene)
             for i in range(cfg.num_envs)
         ]
+
+        # Rollout collection is CPU-bound on mj_step. Each env owns its own
+        # MjModel/MjData, and mj_step releases the GIL, so a small thread
+        # pool turns the serial for-loop into near-linear scaling across
+        # cores (measured ~3.7x on an 8-core i7-9700K for the physics
+        # alone). Curriculum / logging stay on the main thread.
+        self._rollout_workers = _resolve_rollout_workers(
+            cfg.rollout_workers, cfg.num_envs)
+        self._rollout_pool = (
+            ThreadPoolExecutor(max_workers=self._rollout_workers)
+            if self._rollout_workers > 1 else None
+        )
+        if self._rollout_workers > 1:
+            print(f"[rollout] threaded env stepping: "
+                  f"{self._rollout_workers} workers × {cfg.num_envs} envs "
+                  f"(mj_step releases the GIL; see docs/TRAINING-SPEED.md)")
+        else:
+            print("[rollout] serial env stepping "
+                  "(--rollout-workers 1 to force, 0 = auto)")
 
         self.agent = Go2Agent(init_log_std=cfg.init_log_std).to(self.device)
         self.optimizer = torch.optim.Adam(
@@ -198,29 +232,61 @@ class Trainer:
             buf.values[step] = value
 
             actions_np = action.cpu().numpy()
-            for i, env in enumerate(self.envs):
-                obs, priv, reward, term, trunc, info = env.step(actions_np[i])
+            results = self._step_envs(actions_np)
+
+            curriculum_changed = False
+            for i, (obs, priv, reward, term, trunc, info) in results:
                 buf.rewards[step, i] = reward
                 buf.dones[step, i] = float(term)  # NOT trunc — see compute_gae
 
                 if term or trunc:
                     ep = info["episode"]
                     self.episode_returns.append(ep["r"])
-                    change = self.curriculum.record(ep["r"], ep["max_r"])
+                    change = self.curriculum.record(
+                        ep["r"], ep["max_r"],
+                        distance_m=ep.get("distance_m", 0.0),
+                        mean_body_vx=ep.get("mean_body_vx", 0.0),
+                    )
                     if change:
                         print(f"  [curriculum] {change}")
                         self._reset_all()
-                        obs, priv = self._obs[i], self._priv[i]
-                    else:
-                        cmd = self.curriculum.sample_command(env.rng)
-                        obs, priv = env.reset(
-                            scene=self.curriculum.level.scene, command=cmd)
+                        curriculum_changed = True
+                        break
+                    cmd = self.curriculum.sample_command(self.envs[i].rng)
+                    obs, priv = self.envs[i].reset(
+                        scene=self.curriculum.level.scene, command=cmd)
 
                 self._obs[i] = obs
                 self._priv[i] = priv
 
+            # After a level change every env was reset; skip writing the
+            # pre-reset obs from envs that had not yet been processed in
+            # this step's result loop (they are stale).
+            if curriculum_changed:
+                pass
+
             self.global_step += self.cfg.num_envs
 
+    def _step_envs(self, actions_np):
+        """
+        Step every env, optionally in parallel.
+
+        Returns a list of (i, (obs, priv, reward, term, trunc, info)) sorted
+        by env index so curriculum / buffer writes stay deterministic.
+        """
+        if self._rollout_pool is None:
+            return [
+                (i, self.envs[i].step(actions_np[i]))
+                for i in range(self.cfg.num_envs)
+            ]
+
+        def _one(i):
+            return i, self.envs[i].step(actions_np[i])
+
+        return sorted(
+            self._rollout_pool.map(_one, range(self.cfg.num_envs)),
+            key=lambda pair: pair[0],
+        )
     def ppo_update(self, buf: RolloutBuffer):
         cfg = self.cfg
         with torch.no_grad():
@@ -448,6 +514,24 @@ class Trainer:
         print(f"resumed from {path} at step {self.global_step:,} "
               f"(update {self.update}, level '{self.curriculum.level.name}')")
 
+    def init_weights(self, path):
+        """
+        Warm-start the policy/critic from another run WITHOUT restoring
+        optimiser, RNG, curriculum or step counter.
+
+        Use this after a reward rebalance: --resume would keep a value
+        function trained under the old reward, which is how broken runs
+        get laundered into "new" experiments. Loading only the agent
+        transfers a walking gait and lets PPO re-fit the critic.
+        """
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
+        self.agent.load_state_dict(ckpt["agent"])
+        src_step = ckpt.get("global_step", None)
+        step_s = f"{src_step:,}" if isinstance(src_step, int) else "?"
+        print(f"warm-started agent from {path} "
+              f"(source step {step_s}; optimiser/curriculum/step fresh)")
+        self._reset_all()
+
     # ------------------------------------------------------------------
     # Main loop
     # ------------------------------------------------------------------
@@ -546,10 +630,24 @@ def main():
                     help="force a PPO sizing profile from tune_profiles.py "
                          "instead of detecting one "
                          "(list them: python tune_profiles.py --all)")
+    ap.add_argument("--rollout-workers", type=int, default=None,
+                    help="threads for env.step during rollout "
+                         "(0=auto=min(num_envs,cpus), 1=serial). "
+                         "mj_step releases the GIL; see docs/TRAINING-SPEED.md")
     ap.add_argument("--resume", default=None, metavar="CHECKPOINT.pt")
+    ap.add_argument("--init-from", default=None, metavar="CHECKPOINT.pt",
+                    help="warm-start agent weights only (not optimiser / "
+                         "curriculum / step). Use after a reward change "
+                         "instead of --resume")
+    ap.add_argument("--flat-bootstrap", action="store_true",
+                    help="phase-1 flat trot only: no curriculum, no domain "
+                         "rand, fixed gait — use until diagnose shows walking")
     ap.add_argument("--no-curriculum", action="store_true",
                     help="pin level 0 — use when debugging the reward function")
     ap.add_argument("--no-domain-rand", action="store_true")
+    ap.add_argument("--fixed-gait", action="store_true",
+                    help="disable per-episode gait randomisation (use --gait "
+                         "or Config.gait = trot)")
     ap.add_argument("--adapt-steps", type=int, default=None)
     ap.add_argument("--smoke", action="store_true",
                     help="~30 s end-to-end run: both phases, tiny budgets")
@@ -565,12 +663,24 @@ def main():
         cfg.minibatch_size_override = args.minibatch_size
     if args.tune_profile is not None:
         cfg.tune_profile = args.tune_profile
+    if args.rollout_workers is not None:
+        cfg.rollout_workers = args.rollout_workers
     if args.adapt_steps is not None:
         cfg.adapt_steps = args.adapt_steps
     if args.no_curriculum:
         cfg.curriculum = False
     if args.no_domain_rand:
         cfg.domain_rand = False
+    if args.fixed_gait:
+        cfg.randomize_gait = False
+        cfg.gait = "trot"
+    if args.flat_bootstrap:
+        cfg.curriculum = False
+        cfg.domain_rand = False
+        cfg.randomize_gait = False
+        cfg.gait = "trot"
+        print("FLAT BOOTSTRAP — flat trot only; no curriculum or domain rand.")
+        print("  Run diagnose.py before any long budget. See docs/TRAINING-SPEED.md\n")
 
     if args.smoke:
         cfg.run_name = args.run_name if args.run_name != "go2_ppo" else "smoke"
@@ -589,8 +699,12 @@ def main():
     # a GPU was unavailable and scales the PPO update to the device.
     print(cfg.describe())
     trainer = Trainer(cfg)
+    if args.resume and args.init_from:
+        raise SystemExit("use --resume OR --init-from, not both")
     if args.resume:
         trainer.load(args.resume)
+    if args.init_from:
+        trainer.init_weights(args.init_from)
     trainer.train()
 
 

@@ -87,17 +87,15 @@ PROFILES = [
     # -- NVIDIA ------------------------------------------------------------
     TuneProfile(
         name="rtx3050-8gb",
-        backend="cuda", num_envs=32, rollout_steps=64, minibatch_size=512,
+        backend="cuda", num_envs=16, rollout_steps=64, minibatch_size=256,
         tf32=False, torch_threads=8, measured=True,
         rationale=(
-            "MEASURED on an RTX 3050 8GB + i7-9700K (8c/8t, no SMT), the "
-            "machine this repo's Stage 3 runs were developed on. Sustains "
-            "1,050-1,170 steps/s. The bottleneck is MuJoCo stepping on the "
-            "CPU, not the GPU -- the 3050 is largely idle during rollout "
-            "collection, which is why raising num_envs further does not "
-            "help on this box. tf32 off: measured to put a 0.0014 floor "
-            "under approx_kl on a first minibatch where the exact answer "
-            "is 0."
+            "MEASURED on an RTX 3050 8GB + i7-9700K (8c/8t, no SMT). "
+            "num_envs 16 (2x cores) with threaded rollouts keeps the CPU "
+            "busy without oversubscribing; 32 envs measured slower due to "
+            "thread contention. minibatch 256 = 4 minibatches/epoch of "
+            "16x64=1024. tf32 off: measured to put a 0.0014 floor under "
+            "approx_kl where the exact answer is 0."
         ),
     ),
     TuneProfile(

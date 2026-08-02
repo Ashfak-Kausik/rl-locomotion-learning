@@ -1,0 +1,33 @@
+---
+description: Stage 3 Go2 training — never launch without explicit user approval
+globs:
+  - stage3-go2-training/**
+  - docs/TRAINING-SPEED.md
+alwaysApply: true
+---
+
+# Stage 3 training guardrails
+
+## Do NOT start training unless the user explicitly asks
+
+Never run `train.py` with a real budget (anything beyond `--smoke` or a
+user-requested `--timesteps` probe) without the user saying to start training
+in the current conversation.
+
+Allowed without asking:
+- `python stage3-go2-training/train.py --smoke`
+- `make train-smoke` / `make train-bench` (200k probe)
+- Reading logs, `diagnose.py`, exporting checkpoints, rendering videos
+
+Requires explicit user approval:
+- Background `nohup` training runs
+- `--timesteps` >= 500_000 or default 15M budgets
+- `make train-gpu` / full production runs
+
+When the user approves training, prefer:
+1. `--flat-bootstrap` until `diagnose.py` shows walking (>0.15 m/s, >1.5 m/10s)
+2. `--rollout-workers 0` (threaded MuJoCo — default)
+3. Short probe first (`--timesteps 200000`), then diagnose, then longer budget
+4. New `--run-name` after any reward-weight change — never `--resume` across them
+
+See `docs/TRAINING-SPEED.md` and `.claude/skills/train/SKILL.md`.

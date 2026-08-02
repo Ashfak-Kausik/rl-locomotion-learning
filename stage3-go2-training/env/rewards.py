@@ -65,6 +65,18 @@ def body_height(height, target=0.30):
     return -float((height - target) ** 2)
 
 
+def low_body_height(height, min_height=0.25):
+    """
+    Linear penalty for crouch / floor-dig below a hard floor.
+
+    Squared body_height around 0.30 m still lets the policy sit at 0.21 m
+    (multigait_v5–v7) because the penalty is tiny while idle bonuses dominate.
+    This term grows linearly in the gap, so "dig into the floor" hurts every
+    step, not only when far from the nominal target.
+    """
+    return -float(max(0.0, min_height - height))
+
+
 def joint_torque(torques):
     """Energy proxy. Discourages stiff, high-current gaits."""
     return -float(np.sum(np.square(torques)))
@@ -128,6 +140,31 @@ def forward_progress(cmd_vx, actual_vx):
     if abs(cmd_vx) < 1e-6:
         return 0.0
     return float(np.clip(actual_vx / cmd_vx, 0.0, 1.0))
+
+
+def heading_hold(cmd_vx, cmd_vy, actual_vx, actual_vy):
+    """
+    Reward velocity pointing the way the command says, not just speed.
+
+    multigait_v8 learned to walk (vx ~0.29 m/s) but spiralled: body-frame
+    forward speed looked fine while the WORLD-frame path curved back, so
+    `distance_m` stayed low and curriculum never promoted. forward_progress
+    only checks |v_x| against cmd_vx; this term checks the whole velocity
+    vector's direction against the commanded direction.
+
+    Implementation: cosine of the angle between commanded and actual planar
+    velocity, projected onto speed so a slow-but-correct robot scores a
+    little and a fast-but-sideways robot scores less than a slow straight
+    one. Range [0, ~1] at commanded speed; negative when moving backwards.
+    """
+    cmd_norm = (cmd_vx ** 2 + cmd_vy ** 2) ** 0.5
+    if cmd_norm < 1e-6:
+        return 0.0
+    dot = cmd_vx * actual_vx + cmd_vy * actual_vy
+    speed = (actual_vx ** 2 + actual_vy ** 2) ** 0.5
+    if speed < 1e-6:
+        return 0.0
+    return float((dot / (cmd_norm * speed)) * min(speed / cmd_norm, 1.0))
 
 
 def alive():

@@ -34,36 +34,39 @@ def default_reward_weights():
         #     tracking_lin_vel  0.029   <- 3.8%, the actual objective
         # i.e. 0.82/step for standing still versus 0.03 for the thing we
         # want. Standing was not a bug, it was the rational optimum.
-        "tracking_lin_vel": 2.0,
-        # Linear and non-saturating: the exponential kernel above is flat
-        # far from target, so a stationary robot cannot feel the gradient.
-        # This one always pays to move faster. See rewards.forward_progress.
-        "forward_progress": 1.0,
-        # 0.35 -> 0.2. Standing scores this near its maximum (yaw rate is
-        # trivially ~0) while a real trot's natural yaw oscillation scores
-        # lower -- measured 0.50/step standing vs 0.28/step walking. It was
-        # the second-largest reward source for doing nothing.
-        "tracking_ang_vel": 0.2,
-        # 0.5 -> 0.15. This is a pure participation trophy: paid every step
-        # for not having fallen over, and it was 67% of the standing
-        # policy's entire reward. It still needs to be positive so that
-        # falling is worse than surviving, but it must not be competitive
-        # with actually moving.
-        "alive": 0.15,
+        "tracking_lin_vel": 2.5,
+        # 2.5 -> 5.0 after v8_flat 200k probe: objective mass was 42% but
+        # vx still 0.009 m/s — forward_progress at half-command should
+        # out-earn standing (~0.05/step) by an order of magnitude.
+        "forward_progress": 5.0,
+        # Straight-line locomotion, not drift. v8/v9 walked (vx ~0.3 m/s)
+        # but spiralled: body vx was fine while the world path curved back,
+        # so distance_m stayed ~0.5 m and curriculum never promoted.
+        "heading_hold": 2.0,
+        # 0.2 -> 0.05. Measured on v6 best: 0.195/step (38% of reward) while
+        # stationary — yaw rate is trivially ~0 when you do not move. Keep a
+        # trickle so commanded yaw turns still matter; do not subsidise idle.
+        "tracking_ang_vel": 0.05,
+        # 0.15 -> 0.05. Same story: pure survival bonus, 29% of v6 standing
+        # reward. Fall penalty (-10) still makes dying worse than surviving.
+        # v7 still stood still with 0.05 — removed entirely; only fall_penalty
+        # offsets the negative stability terms now.
+        "alive": 0.0,
         # --- stability -------------------------------------------------
         "lateral_drift": 0.5,      # Exp 1 F1.3: baseline never penalised this
         "vertical_velocity": 0.5,
         "body_orientation": 1.0,
-        # 5 -> 20. multigait_v5 learned to crouch to 0.21 m (front legs on
-        # the floor) because the squared-height penalty at weight 5 cost only
-        # ~0.04/step while standing still still paid ~0.66/step. At weight 20
-        # the same crouch costs ~0.16/step — enough to matter without
-        # overwhelming a real gait's tracking reward (~3/step at target).
-        "body_height": 20.0,
+        # 20 -> 8. v8_flat best stood at h=0.258 m; squared pull at weight 20
+        # cost -0.036/step — comparable to joint_torque and fighting the
+        # bounce of a nascent gait. low_body_height still blocks crouch/dig.
+        "body_height": 8.0,
+        # Linear floor at 0.25 m — kills crouch / floor-dig (v5–v7). At h=0.21
+        # the gap is 0.04 m -> -0.4/step at weight 10, comparable to idle hacks.
+        "low_body_height": 10.0,
         # --- smoothness / energy ---------------------------------------
         "action_rate": 0.01,
         "action_magnitude": 0.001,
-        "joint_torque": 0.0002,
+        "joint_torque": 0.0001,
         "joint_velocity": 0.001,
         "joint_acceleration": 2.5e-7,
     }
@@ -108,6 +111,14 @@ class Config:
     promote_threshold: float = 0.75
     demote_threshold: float = 0.30
     curriculum_window: int = 20
+    # Must show real locomotion before leaving flat-slow (see curriculum.py).
+    promote_min_body_vx: float = 0.15
+    # v8/v9 moved (vx ~0.3 m/s) but curved, so displacement stayed < 1.5 m
+    # and curriculum never left flat-slow. Path distance (see go2_env) or a
+    # lower displacement floor is what a curvy-but-moving gait can pass.
+    promote_min_distance_m: float = 0.8
+    # Crouch / floor height penalty activates below this body height (metres).
+    low_height_min: float = 0.25
 
     # --- PPO (phase 1) -------------------------------------------------
     total_timesteps: int = 5_000_000
@@ -160,6 +171,11 @@ class Config:
     # nothing at all on a GPU box.
     num_envs_override: int = 0
     minibatch_size_override: int = 0
+    # Parallelise env.step across CPU cores during rollout collection.
+    # 0 = auto (min(num_envs, os.cpu_count())); 1 = serial; N = N threads.
+    # Safe because each Go2Env owns its own MjModel/MjData and mj_step
+    # releases the GIL. See docs/TRAINING-SPEED.md.
+    rollout_workers: int = 0
     # The one sizing rule that must never be broken, wherever the numbers
     # come from: minibatch_size MUST stay strictly smaller than
     # num_envs * rollout_steps, or "minibatch" silently becomes the entire

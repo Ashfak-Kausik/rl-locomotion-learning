@@ -225,6 +225,10 @@ the run is 40× slower than expected. When a device is found,
 `rtx3050-8gb`; estimated `arc-*` / `cuda-*` / `apple-mps` / `cpu-*` until
 someone benchmarks).
 
+Throughput knobs (rollout threads, what not to raise, early-stop
+discipline) live in [`docs/TRAINING-SPEED.md`](../docs/TRAINING-SPEED.md).
+Threaded env stepping is on by default (`--rollout-workers 0` = auto).
+
 A local consumer GPU helps the PPO update, not the simulation — MuJoCo still
 steps on CPU here. Measured on an RTX 3050 (8 GB, sm_86):
 

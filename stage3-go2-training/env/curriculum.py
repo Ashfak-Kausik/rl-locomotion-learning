@@ -17,10 +17,16 @@ where a new policy has to beat it on terrain the baseline cannot handle. That
 makes
 progress measurable against a real number instead of a vibe.
 
-Promotion rule: a level is cleared when the agent's recent mean episode return
-exceeds `promote_threshold` * the return achievable at that level. Demotion on
-sustained failure prevents the classic curriculum failure mode, where an agent
-is pushed past its competence and collapses with no way back.
+Promotion rule (two gates — both required on flat levels):
+
+  1. Recent mean normalized return >= `promote_threshold`.
+  2. Recent mean body-frame forward speed OR distance per episode proves the
+     robot is actually locomoting, not standing/crouching for free return.
+
+Return-only promotion is what let multigait_v4–v7 sit on `flat-slow` for 15M
+steps: standing still scored high `alive` / ang_vel while body vx stayed ~0.
+
+Demotion stays return-based so a promoted policy that collapses can step back.
 """
 
 from dataclasses import dataclass, field
@@ -41,8 +47,8 @@ class Level:
 # stage2-go2-mujoco-inference/scenes/, so terrain is identical to Experiment 3
 # and the results are directly comparable.
 LEVELS = [
-    Level("flat-slow", "go2_flat.xml", (0.0, 0.5), (0.0, 0.0), (0.0, 0.0),
-          "learn to stand and walk at all"),
+    Level("flat-slow", "go2_flat.xml", (0.2, 0.5), (0.0, 0.0), (0.0, 0.0),
+          "learn to stand and walk at all; vx >= 0.2 so movement can be taught"),
     Level("flat-fast", "go2_flat.xml", (0.0, 1.0), (-0.3, 0.3), (-0.5, 0.5),
           "full command range on flat ground"),
     Level("flat-run", "go2_flat.xml", (0.5, 2.5), (-0.3, 0.3), (-0.5, 0.5),
@@ -91,8 +97,13 @@ class Curriculum:
     level_idx: int = 0
     promote_threshold: float = 0.75
     demote_threshold: float = 0.30
+    # Movement gates — must pass in addition to return before promoting off flat.
+    promote_min_body_vx: float = 0.15   # m/s, body frame, episode mean
+    promote_min_distance_m: float = 1.5   # world-frame travel per episode
     window: int = 20
     _returns: list = field(default_factory=list)
+    _body_vxs: list = field(default_factory=list)
+    _distances: list = field(default_factory=list)
 
     @property
     def level(self) -> Level:
@@ -102,7 +113,8 @@ class Curriculum:
     def max_idx(self) -> int:
         return len(LEVELS) - 1
 
-    def record(self, episode_return, max_possible_return):
+    def record(self, episode_return, max_possible_return,
+               distance_m=0.0, mean_body_vx=0.0):
         """
         Log one finished episode and maybe change level.
         Returns a string describing any change, else None.
@@ -111,20 +123,32 @@ class Curriculum:
             return None
 
         self._returns.append(episode_return / max(max_possible_return, 1e-6))
+        self._body_vxs.append(float(mean_body_vx))
+        self._distances.append(float(distance_m))
         if len(self._returns) < self.window:
             return None
 
         recent = self._returns[-self.window:]
         score = sum(recent) / len(recent)
+        mean_vx = sum(self._body_vxs[-self.window:]) / self.window
+        mean_dist = sum(self._distances[-self.window:]) / self.window
+        moving = (mean_vx >= self.promote_min_body_vx
+                  or mean_dist >= self.promote_min_distance_m)
 
-        if score >= self.promote_threshold and self.level_idx < self.max_idx:
+        if (score >= self.promote_threshold and moving
+                and self.level_idx < self.max_idx):
             self.level_idx += 1
             self._returns.clear()
-            return f"PROMOTE -> {self.level.name} ({self.level.note})"
+            self._body_vxs.clear()
+            self._distances.clear()
+            return (f"PROMOTE -> {self.level.name} ({self.level.note}) "
+                    f"[vx={mean_vx:.2f} m/s dist={mean_dist:.1f} m]")
 
         if score <= self.demote_threshold and self.level_idx > 0:
             self.level_idx -= 1
             self._returns.clear()
+            self._body_vxs.clear()
+            self._distances.clear()
             return f"demote -> {self.level.name}"
 
         return None
@@ -139,8 +163,15 @@ class Curriculum:
         )
 
     def state_dict(self):
-        return {"level_idx": self.level_idx, "returns": list(self._returns)}
+        return {
+            "level_idx": self.level_idx,
+            "returns": list(self._returns),
+            "body_vxs": list(self._body_vxs),
+            "distances": list(self._distances),
+        }
 
     def load_state_dict(self, state):
         self.level_idx = state.get("level_idx", 0)
         self._returns = list(state.get("returns", []))
+        self._body_vxs = list(state.get("body_vxs", []))
+        self._distances = list(state.get("distances", []))

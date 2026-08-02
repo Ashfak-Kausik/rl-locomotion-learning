@@ -203,6 +203,11 @@ class Go2Env:
         self.step_count = 0
         self.episode_return = 0.0
         self.reward_breakdown = {}
+        self.episode_start_xy = self.data.qpos[0:2].copy()
+        self.episode_path_length = 0.0
+        self.episode_vx_sum = 0.0
+        self.episode_vx_steps = 0
+        self._prev_xy = self.data.qpos[0:2].copy()
 
         self._push_obs()
         return self.get_observation(), self.privileged.copy()
@@ -280,6 +285,13 @@ class Go2Env:
         self.step_count += 1
         self._push_obs()
 
+        # Path distance, not just start->end displacement. A robot that turns
+        # still covers ground; curriculum should see locomotion, not geometry.
+        xy = self.data.qpos[0:2]
+        self.episode_path_length += float(
+            np.linalg.norm(xy - self._prev_xy))
+        self._prev_xy = xy.copy()
+
         reward, terminated = self._compute_reward(torques)
         self.episode_return += reward
         truncated = self.step_count >= self.max_episode_steps
@@ -294,10 +306,16 @@ class Go2Env:
             "scene": self.scene_name,
         }
         if terminated or truncated:
+            dist = float(np.linalg.norm(self.data.qpos[0:2] - self.episode_start_xy))
+            mean_vx = self.episode_vx_sum / max(self.episode_vx_steps, 1)
             info["episode"] = {
                 "r": self.episode_return,
                 "l": self.step_count,
                 "max_r": self.max_possible_return(),
+                "distance_m": self.episode_path_length,
+                "displacement_m": dist,
+                "mean_body_vx": mean_vx,
+                "cmd_vx": self.cmd_vx,
             }
 
         return (self.get_observation(), self.privileged.copy(),
@@ -325,18 +343,24 @@ class Go2Env:
         # penalised even when its actual forward speed is perfect, which
         # teaches it that turning is bad rather than that drifting is.
         v_body = quat_rotate_inverse(quat, d.qvel[0:3].copy())
+        self.episode_vx_sum += float(v_body[0])
+        self.episode_vx_steps += 1
 
         terms = {
             "tracking_lin_vel": R.tracking_lin_vel(
                 self.cmd_vx, self.cmd_vy, v_body[0], v_body[1],
                 self.cfg.tracking_sigma),
             "forward_progress": R.forward_progress(self.cmd_vx, v_body[0]),
+            "heading_hold": R.heading_hold(
+                self.cmd_vx, self.cmd_vy, v_body[0], v_body[1]),
             "tracking_ang_vel": R.tracking_ang_vel(
                 self.cmd_yaw, d.qvel[5], self.cfg.tracking_sigma),
             "lateral_drift": R.lateral_drift(v_body[1]),
             "vertical_velocity": R.vertical_velocity(d.qvel[2]),
             "body_orientation": R.body_orientation(proj_grav),
             "body_height": R.body_height(height),
+            "low_body_height": R.low_body_height(
+                height, min_height=self.cfg.low_height_min),
             "joint_torque": R.joint_torque(torques),
             "joint_velocity": R.joint_velocity(joint_vel),
             "joint_acceleration": R.joint_acceleration(

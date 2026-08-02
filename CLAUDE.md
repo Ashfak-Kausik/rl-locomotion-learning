@@ -191,6 +191,11 @@ package inventory is in [`docs/NATIVE-SETUP.md`](docs/NATIVE-SETUP.md).
   weights needed. `tests/test_obs_contract.py` is the defence of the 70-dim
   contract; `tests/test_constants.py` catches drift between the four files that
   duplicate the control constants.
+- **Never start Stage 3 training without explicit user approval.** Smoke tests
+  (`train.py --smoke`, `make train-smoke`) and log/diagnose/export are fine.
+  Full-budget runs, background `nohup`, and `make train-gpu` require the user to
+  say so in the current chat. See `.cursor/rules/stage3-training.mdc` and
+  `.claude/skills/train/SKILL.md`.
 
 ---
 

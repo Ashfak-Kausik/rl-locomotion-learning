@@ -50,6 +50,7 @@ without the policy weights.
 | Document | Contents |
 |---|---|
 | **[DEPENDENCIES.md](DEPENDENCIES.md)** | Complete checklist, standalone bootstrap, GPU flavours (NVIDIA / Arc / ROCm / MPS), what runs without the policy weights, troubleshooting. |
+| **[TRAINING-SPEED.md](TRAINING-SPEED.md)** | Where Stage 3 time goes, threaded rollouts, profile knobs, what not to tweak, MJX ceiling. |
 | **[NATIVE-SETUP.md](NATIVE-SETUP.md)** | Running on the host without Docker: exact package inventory, what to uninstall, verified commands, rendering-backend speeds. |
 | **[DOCKER.md](DOCKER.md)** | Four compose services, volume layout, rendering backends, file ownership, troubleshooting. |
 
