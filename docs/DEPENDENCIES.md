@@ -90,7 +90,6 @@ Tick these off and the whole pipeline runs.
 - [ ] OSMesa (`libosmesa6`) or EGL (`libegl1`) — **only** for headless rendering
 - [ ] `swig` — **only** if Box2D has no prebuilt wheel for your platform
 - [ ] `ffmpeg` — **only** for encoding demo GIFs
-- [ ] Docker + Compose v2 — **only** for Path B
 
 **Python** (all via `requirements.txt`, plus `requirements-dev.txt` for tests)
 - [ ] `numpy>=1.26,<3`
@@ -113,7 +112,7 @@ Tick these off and the whole pipeline runs.
 **Hardware**
 - [x] Any x86-64 CPU. 8 cores is comfortable; the experiments are CPU-bound
 - [x] ~4 GB RAM
-- [x] ~3 GB disk (venv ≈ 1.5 GB, Docker image ≈ 2 GB)
+- [x] ~3 GB disk (venv ≈ 1.5–5 GB depending on CUDA torch)
 - [ ] GPU — **not required** for Stages 1–2. Stage 3 training wants one; see §4.1 for NVIDIA / Arc / ROCm / MPS
 
 ---
@@ -385,7 +384,7 @@ Read-only. Checks four layers and exits non-zero if a **required** item is
 missing (optional items are `WARN` and never fail the run).
 
 ```
-1. SYSTEM   OS, Python version, venv, native libs, Docker, GPU (NVIDIA / Arc / ROCm / MPS)
+1. SYSTEM   OS, Python version, venv, native libs, GPU (NVIDIA / Arc / ROCm / MPS)
 2. PYTHON   every package + version, plus which torch build is installed
 3. ASSETS   MJCF, meshes, terrain scenes, policy weights, result CSVs
 4. RUNTIME  does MuJoCo really load go2_flat.xml? do the Gym envs build?

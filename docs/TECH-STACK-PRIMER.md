@@ -40,7 +40,7 @@ before.
 | RL algos | Stable-Baselines3 | PPO **training** | Stage 1 |
 | Diagnostics | TensorBoard | training curves | Stage 1 |
 | Figures | Matplotlib | paper plots | Stage 2 |
-| Reproducibility | Docker | pinned environment | repo-wide |
+| Reproducibility | host venv + `requirements.txt` | pinned environment | repo-wide |
 
 **Note the asymmetry**: Stage 1 *trains* neural networks with a high-level
 library. Stage 2 only *runs* an already-trained one, but hand-writes
@@ -261,7 +261,7 @@ The `MUJOCO_GL` environment variable picks the rendering backend:
 | value | meaning | when |
 |---|---|---|
 | `glfw` (default) | on-screen window | desktop with a display |
-| `osmesa` | CPU software rendering | Docker, CI, servers |
+| `osmesa` | CPU software rendering | headless servers, no GPU |
 | `egl` | GPU rendering, no window | headless machine with a GPU |
 
 ---
@@ -531,7 +531,7 @@ about PPO's robustness. The full analysis is in
 import matplotlib
 matplotlib.use("Agg")      # MUST come before pyplot import.
                            # "Agg" = write files, never open a window.
-                           # Without it, headless/Docker runs crash.
+                           # Without it, headless runs crash.
 import matplotlib.pyplot as plt
 
 plt.rcParams.update({"font.size": 11, "figure.dpi": 300,
@@ -629,7 +629,7 @@ change of *simulator*, it will not survive reality.
 | Robot twitches, never walks | wrong `DECIMATION`, so policy runs at the wrong Hz | 500 Hz physics ÷ 10 = 50 Hz policy |
 | Legs splay outward | hip sign convention flipped | FL/RL `+0.1`, FR/RR `−0.1` |
 | `ValueError: ... does not exist` on `.jit` | policy weights absent | `export GO2_POLICY_DIR=...` — see [DEPENDENCIES.md](DEPENDENCIES.md) |
-| Matplotlib hangs/crashes in Docker | interactive backend | `matplotlib.use("Agg")` before importing pyplot |
+| Matplotlib hangs/crashes headless | interactive backend | `matplotlib.use("Agg")` before importing pyplot |
 | `mujoco.viewer` fails (no display / GLX) | headless host or driver mismatch | `MUJOCO_GL=egl` or `osmesa`; see NATIVE-SETUP.md |
 | `Image width 900 > framebuffer width 640` | offscreen framebuffer defaults to 640×480 and `Renderer` will not resize | set `model.vis.global_.offwidth/offheight` **before** building the `Renderer` |
 | `GLFWError: GLX: Failed to create context` on a desktop | GPU driver/library mismatch (often an NVIDIA update without a reboot) | reboot; or force software GL: `LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa` |

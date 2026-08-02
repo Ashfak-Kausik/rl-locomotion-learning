@@ -7,7 +7,7 @@ ground is before they start building.
 **Method:** every `.py`, `.xml`, `.csv` and `.md` file read in full; all
 constants cross-checked against `scenes/go2_model/go2.xml`; every claim in the
 READMEs checked against the code that would have to produce it; the full
-pipeline executed on a clean machine (host venv and Docker).
+pipeline executed on a clean machine (host venv).
 
 **Verdict up front:** the research is sound and the claims check out. The
 engineering had one hard blocker (machine-specific absolute paths, now fixed)
@@ -210,18 +210,18 @@ Cosmetic, but they are exactly what a newcomer trusts.
 
 There was no `requirements.txt`, no lockfile, no environment file. Versions had
 to be inferred from imports. **Fixed:** `requirements.txt`, `scripts/setup_env.sh`,
-`scripts/check_env.py`, and a Docker image.
+`scripts/check_env.py`.
 
 ### R10 — `.gitignore` had duplicated entries
 
 `tb_logs/` and `*.zip` each appeared three times. Rewritten and commented, with
 a `policies/**` + `!policies/README.md` rule added for the checkpoints.
 
-### R11 — `.vscode/` was committed despite being ignored
+### R11 — `.vscode/` was committed despite being ignored (fixed)
 
-`.vscode/browse.vc.db*` (IntelliSense caches) are tracked in git history from
-before the ignore rule was added. Not fixed here — untracking them is a
-history-touching decision for the repo owner.
+`.vscode/browse.vc.db*` (IntelliSense caches) were force-tracked from before
+the ignore rule was added. Untracked via `git rm --cached`; the files remain
+local-only under `.vscode/`.
 
 ### R12 — Root README is truncated
 

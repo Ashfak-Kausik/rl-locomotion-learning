@@ -135,7 +135,7 @@ python stage2-go2-mujoco-inference/experiments/exp1_velocity_sweep.py
 | 1 — RL fundamentals | ✅ complete, all 3 environments solved |
 | 2 — Go2 inference in MuJoCo | ✅ complete, robot walks |
 | Research layer | ✅ 3 experiments, 75 trials, findings documented |
-| Infrastructure | ✅ deps, Docker, portable paths, docs |
+| Infrastructure | ✅ deps, host venv, portable paths, docs |
 | 3 — Custom policy training | ⚙️ full pipeline implemented + verified; needs GPU for a converged policy |
 | 4 — Vision-conditioned locomotion | 📋 planned |
 | 5 — ROS2 deployment | 📋 planned |

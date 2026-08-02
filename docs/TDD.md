@@ -199,10 +199,11 @@ generalises beyond this project.
 |---|---|
 | Config file (YAML/TOML) | ❌ adds a dependency and a parse step for two strings |
 | CLI arguments everywhere | ❌ invasive; breaks the "just run it" ergonomics |
-| **Env vars with in-repo defaults** | ✅ zero-config default, Docker-native, one file to change |
+| **Env vars with in-repo defaults** | ✅ zero-config default, one file to change |
 
 **Consequence.** `paths.py` is the single source of truth. `GO2_POLICY_DIR`
-maps directly onto a Docker volume mount. Nothing else in the pipeline changed.
+overrides the default checkpoint location without editing source. Nothing else
+in the pipeline changed.
 
 ---
 
@@ -296,7 +297,7 @@ that import cleanly but cannot do the job.
 
 Capability-based rather than package-name-based: it checks for `Python.h` and a
 working `cc`, not for `python3-dev` and `build-essential`, so it is correct on
-any distro and inside slim container images.
+any distro.
 
 ---
 
@@ -364,7 +365,6 @@ pipeline expects". A shape probe in `load_policy()` would close this cheaply.
 | Real-time pacing | absent in the harness | trials run as fast as the CPU allows |
 | History flattening | `np.concatenate` per step | O(2100), negligible |
 | Torch wheel size | CPU-only index | 2.5 GB → 190 MB |
-| Docker layer caching | `requirements.txt` copied before code | code edits never trigger reinstall |
 
 Measured budget: 50 Hz gives 20 ms per policy step; inference is reported at
 < 2 ms, leaving ~90% headroom. Adding a vision encoder in Stage 4 will consume

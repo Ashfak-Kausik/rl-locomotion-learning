@@ -32,7 +32,7 @@ silent.
 An AI coding agent is very good at:
 
 - reading 2,600 lines of unfamiliar Python and telling you what it does
-- writing boilerplate (test scaffolding, CLI parsing, CSV plumbing, Dockerfiles)
+- writing boilerplate (test scaffolding, CLI parsing, CSV plumbing)
 - cross-referencing constants across files that duplicate them
 - turning "why does the robot fall over" into a list of candidate causes
 - writing and maintaining documentation like the set you are reading

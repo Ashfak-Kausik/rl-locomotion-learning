@@ -133,7 +133,7 @@ Full inference pipeline from MuJoCo state → 70-dim observation vector → adap
 | PyTorch | 2.4+ (CPU build) | Policy inference, training, TorchScript export |
 | TensorBoard | 2.16+ | Training diagnostics |
 | pytest | 8+ | Contract test suite |
-| Docker | Compose v2 | Reproducible environment |
+| Host venv | `scripts/setup_env.sh` | Reproducible native environment |
 | MJX / mujoco_playground | optional | GPU scale-up path for Stage 3 |
 
 Exact pins in [`requirements.txt`](./requirements.txt); run `./scripts/setup_env.sh` to install.

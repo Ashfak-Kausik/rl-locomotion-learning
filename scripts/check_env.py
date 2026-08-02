@@ -5,7 +5,7 @@ Environment verifier for rl-locomotion-learning.
 Checks — and reports, without changing anything — every third-party
 dependency this repo needs, in four layers:
 
-  1. System   : OS, Python version, native libs, GPU/driver, Docker
+  1. System   : OS, Python version, native libs, GPU/driver
   2. Python   : importable packages + versions vs. requirements.txt
   3. Assets   : in-repo scenes/meshes, out-of-repo policy checkpoints
   4. Runtime  : does MuJoCo actually load a model? does a Gym env build?

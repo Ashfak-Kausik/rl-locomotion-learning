@@ -178,7 +178,7 @@ def test_scene_env_var_override(monkeypatch, repo_root):
 
 
 def test_policy_dir_env_var_override(monkeypatch, tmp_path):
-    """GO2_POLICY_DIR is how Docker mounts checkpoints from outside the repo."""
+    """GO2_POLICY_DIR overrides the default checkpoint location on the host."""
     monkeypatch.setenv("GO2_POLICY_DIR", str(tmp_path))
     import importlib
     import paths

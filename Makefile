@@ -21,7 +21,7 @@ RUN         ?= v1
         cartpole lunarlander pendulum tensorboard \
         exp1 exp2 exp3 experiments \
         export-random train-gpu \
-        compile lint-imports
+        compile
 
 # --- meta --------------------------------------------------------------------
 
