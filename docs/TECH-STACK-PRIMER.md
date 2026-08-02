@@ -630,7 +630,7 @@ change of *simulator*, it will not survive reality.
 | Legs splay outward | hip sign convention flipped | FL/RL `+0.1`, FR/RR `−0.1` |
 | `ValueError: ... does not exist` on `.jit` | policy weights absent | `export GO2_POLICY_DIR=...` — see [DEPENDENCIES.md](DEPENDENCIES.md) |
 | Matplotlib hangs/crashes in Docker | interactive backend | `matplotlib.use("Agg")` before importing pyplot |
-| `mujoco.viewer` fails in Docker | no display | `MUJOCO_GL=osmesa`, or use the `viewer` compose service |
+| `mujoco.viewer` fails (no display / GLX) | headless host or driver mismatch | `MUJOCO_GL=egl` or `osmesa`; see NATIVE-SETUP.md |
 | `Image width 900 > framebuffer width 640` | offscreen framebuffer defaults to 640×480 and `Renderer` will not resize | set `model.vis.global_.offwidth/offheight` **before** building the `Renderer` |
 | `GLFWError: GLX: Failed to create context` on a desktop | GPU driver/library mismatch (often an NVIDIA update without a reboot) | reboot; or force software GL: `LIBGL_ALWAYS_SOFTWARE=1 __GLX_VENDOR_LIBRARY_NAME=mesa` |
 | `Box2D` import error | Box2D not built | install `swig`, `build-essential`, `python3-dev`, then reinstall `gymnasium[box2d]` |

@@ -293,7 +293,7 @@ real harness round-trip.
 | NFR-2.3 | Terrain scenes regenerable byte-identically | ✅ verified |
 | NFR-2.4 | Figures regenerable from committed CSVs | ✅ verified |
 | NFR-2.5 | Python dependencies declared with version bounds | ✅ `requirements.txt` |
-| NFR-2.6 | A pinned container image reproduces the environment exactly | ✅ `docker/` |
+| NFR-2.6 | A pinned container image reproduces the environment exactly | ❌ removed — host venv + `requirements.txt` only |
 | NFR-2.7 | No machine-specific absolute paths in source | ✅ `paths.py` |
 | NFR-2.8 | External policy checkpoints obtainable and their absence diagnosed | ✅ documented + `check_env.py` |
 
@@ -325,9 +325,9 @@ real harness round-trip.
 |---|---|---|
 | NFR-5.1 | Runs on any Linux distribution | ✅ multi-distro bootstrap |
 | NFR-5.2 | Runs headless (no display) | ✅ `MUJOCO_GL=osmesa` |
-| NFR-5.3 | Runs containerised | ✅ |
+| NFR-5.3 | Runs containerised | ❌ removed |
 | NFR-5.4 | Runs with no GPU | ✅ CPU-only by design |
-| NFR-5.5 | Artefacts written by containers are host-user-owned | ✅ uid/gid build args |
+| NFR-5.5 | Artefacts written by containers are host-user-owned | ❌ n/a (no containers) |
 
 ---
 
@@ -379,8 +379,8 @@ completed runs would corrupt the statistics.
 | FR-2.14–2.19 | `05_inspect_policy.py` prints the network I/O contract |
 | FR-2.20–2.24 | robot achieves sustained locomotion; Exp 1 100% survival |
 | FR-3.\* | 75 committed trial records; regeneration checks |
-| NFR-2.\* | scene regeneration `git diff` empty; figures re-rendered; container run |
-| NFR-3.\* | `check_env.py` executed on host and in container |
+| NFR-2.\* | scene regeneration `git diff` empty; figures re-rendered |
+| NFR-3.\* | `check_env.py` executed on host |
 | FR-4.6–4.7 | Stage 3 export loaded by `paths.load_policy()` and run through `harness.run_trial()` |
 | FR-4.\* | `tests/test_stage3_contract.py`; `train.py --smoke`; export round-trip |
 | NFR-4.2–4.3 | `make test` (93 passing); CI on every push |
@@ -401,7 +401,7 @@ walks well, which is inherently a judgement about a simulation.
 | 1 | FR-1.1–1.9 | `stage1-rl-fundamentals/` | `tb_logs/`, README analysis |
 | 2 | FR-2.1–2.30 | `stage2-go2-mujoco-inference/01-08` | walking robot, `media/stage2_walking.gif` |
 | Research | FR-3.1–3.14 | `experiments/` | `results/*.csv`, `EXPERIMENT_FINDINGS.md` |
-| Infra | NFR-2.5–2.8, 3.1–3.3, 5.\* | `scripts/`, `docker/`, `paths.py` | this branch |
+| Infra | NFR-2.5–2.8, 3.1–3.3, 5.\* | `scripts/`, `paths.py` | this branch |
 | 3 | FR-4.1–4.9 | `stage3-go2-training/` | smoke run + export round-trip + 40 tests |
 | 3 | FR-4.10–4.11 | — | blocked on GPU compute |
 | Tests | NFR-4.2, 4.6 | `tests/` | 93 passing |

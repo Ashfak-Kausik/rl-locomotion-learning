@@ -169,7 +169,6 @@ rl-locomotion-learning/
 ├── docs/                            ← this documentation set
 ├── scripts/                         ← setup_env.sh, check_env.py, hw_profile.py
 ├── hardware/profiles/               ← committed per-machine CPU/GPU records
-├── docker/                          ← Dockerfile, compose.yaml, entrypoint.sh
 └── media/                           Demo GIFs used by the READMEs
 ```
 
@@ -588,31 +587,16 @@ and is a genuine methodological result, not an afterthought.
 Three ways to run, all producing identical numbers:
 
 ```
-  ┌─ A. Host virtualenv ──────────────────────────────────────────────┐
+  ┌─ Host virtualenv ─────────────────────────────────────────────────┐
   │    ./scripts/setup_env.sh  →  .venv/  →  source .venv/bin/activate│
   │    Best for: interactive viewer work, day-to-day development      │
-  │    Rendering: native GLFW window                                  │
+  │    Rendering: native GLFW, or MUJOCO_GL=egl / osmesa headless     │
   └───────────────────────────────────────────────────────────────────┘
 
-  ┌─ B. Docker, headless ─────────────────────────────────────────────┐
-  │    docker compose -f docker/compose.yaml run --rm headless <cmd>  │
-  │    Best for: experiments, CI, "works on any machine" guarantees   │
-  │    Rendering: MUJOCO_GL=osmesa (software, no GPU, no X server)     │
-  └───────────────────────────────────────────────────────────────────┘
-
-  ┌─ C. Docker, GUI ──────────────────────────────────────────────────┐
-  │    xhost +local:docker                                            │
-  │    docker compose -f docker/compose.yaml run --rm viewer          │
-  │    Rendering: MUJOCO_GL=glfw through the mounted X11 socket       │
-  └───────────────────────────────────────────────────────────────────┘
-
-  Path resolution is identical in all three — paths.py reads:
+  Path resolution — paths.py reads:
       GO2_SCENE / GO2_MODEL_PATH   which world to load
       GO2_POLICY_DIR               where the .jit checkpoints live
 ```
-
-The repo is bind-mounted into the container rather than copied, so an edit on
-the host is live inside the container with no rebuild.
 
 ---
 

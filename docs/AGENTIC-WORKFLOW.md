@@ -410,7 +410,7 @@ The one habit that separates useful agentic work from expensive rework.
 | "The environment is set up" | `python scripts/check_env.py` output |
 | "The figures regenerate" | the script's stdout listing four PNGs |
 | "Scenes are reproducible" | `git diff --stat` showing empty |
-| "It runs in Docker" | the container command and its output |
+| "It runs" | the host command and its output |
 | "The refactor is safe" | tests passing before *and* after |
 
 This repo makes verification unusually cheap, which you should exploit:

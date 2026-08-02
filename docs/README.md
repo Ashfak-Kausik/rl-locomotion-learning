@@ -51,8 +51,7 @@ without the policy weights.
 |---|---|
 | **[DEPENDENCIES.md](DEPENDENCIES.md)** | Complete checklist, standalone bootstrap, GPU flavours (NVIDIA / Arc / ROCm / MPS), what runs without the policy weights, troubleshooting. |
 | **[TRAINING-SPEED.md](TRAINING-SPEED.md)** | Where Stage 3 time goes, threaded rollouts, profile knobs, what not to tweak, MJX ceiling. |
-| **[NATIVE-SETUP.md](NATIVE-SETUP.md)** | Running on the host without Docker: exact package inventory, what to uninstall, verified commands, rendering-backend speeds. |
-| **[DOCKER.md](DOCKER.md)** | Four compose services, volume layout, rendering backends, file ownership, troubleshooting. |
+| **[NATIVE-SETUP.md](NATIVE-SETUP.md)** | Host setup: exact package inventory, what to uninstall, verified commands, rendering-backend speeds. |
 
 ### Engineering documents
 
@@ -105,13 +104,6 @@ python stage2-go2-mujoco-inference/experiments/generate_terrain_scenes.py
 python stage2-go2-mujoco-inference/06_run_policy.py
 python stage2-go2-mujoco-inference/07_run_policy_interactive.py
 python stage2-go2-mujoco-inference/experiments/exp1_velocity_sweep.py
-```
-
-```bash
-# Docker
-docker compose -f docker/compose.yaml build
-docker compose -f docker/compose.yaml run --rm lab
-docker compose -f docker/compose.yaml run --rm headless <command>
 ```
 
 ### Environment variables

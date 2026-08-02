@@ -113,25 +113,14 @@ def check_system():
         record(layer, "python >= 3.10", "fail",
                f"found {pv}; mujoco/gymnasium/SB3 all require >= 3.10")
 
-    # A container IS the isolation, so venv/docker checks are noise in there.
-    in_container = (
-        Path("/.dockerenv").exists()
-        or os.environ.get("container") is not None
-    )
-    if in_container:
-        record(layer, "execution context", "info",
-               "inside a container — venv and docker checks skipped",
-               required=False)
-
     # Virtualenv — installing into the system interpreter is a footgun on
     # Debian/Ubuntu derivatives (PEP 668 externally-managed-environment).
-    if not in_container:
-        in_venv = sys.prefix != sys.base_prefix
-        record(layer, "running inside virtualenv",
-               "ok" if in_venv else "warn",
-               str(sys.prefix) if in_venv else
-               "system interpreter — use scripts/setup_env.sh to create .venv",
-               required=False)
+    in_venv = sys.prefix != sys.base_prefix
+    record(layer, "running inside virtualenv",
+           "ok" if in_venv else "warn",
+           str(sys.prefix) if in_venv else
+           "system interpreter — use scripts/setup_env.sh to create .venv",
+           required=False)
 
     # C toolchain — needed to build Box2D from source when no wheel exists.
     # Check for a working compiler, not for a distro package name.
@@ -176,25 +165,6 @@ def check_system():
         record(layer, f"bin: {exe}",
                "ok" if found else ("fail" if required else "warn"),
                f"{found} — {why}" if found else why, required=required)
-
-    # Docker (optional — only for the containerised path)
-    if in_container:
-        pass
-    elif shutil.which("docker"):
-        ver = subprocess.run(["docker", "--version"], capture_output=True,
-                             text=True).stdout.strip()
-        compose = subprocess.run(["docker", "compose", "version"],
-                                 capture_output=True, text=True)
-        detail = ver
-        if compose.returncode == 0:
-            detail += f" | {compose.stdout.strip().splitlines()[0]}"
-        else:
-            detail += " | compose plugin MISSING"
-        record(layer, "docker", "ok", detail, required=False)
-    else:
-        record(layer, "docker", "warn",
-               "not installed — needed only for the container workflow",
-               required=False)
 
     check_gpu(layer)
 
@@ -602,7 +572,7 @@ def print_report(quiet=False):
     print(BOLD("=" * 78))
 
     layers = {
-        "system": "1. SYSTEM  (OS, interpreter, native libs, docker, gpu)",
+        "system": "1. SYSTEM  (OS, interpreter, native libs, gpu)",
         "python": "2. PYTHON  (packages from requirements.txt)",
         "assets": "3. ASSETS  (robot model, terrain scenes, policy weights)",
         "runtime": "4. RUNTIME (does it actually work?)",

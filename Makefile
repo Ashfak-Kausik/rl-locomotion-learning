@@ -13,8 +13,6 @@ STAGE2      := stage2-go2-mujoco-inference
 EXP         := $(STAGE2)/experiments
 STAGE3      := stage3-go2-training
 RUN         ?= v1
-COMPOSE     := docker compose -f docker/compose.yaml
-DOCKER_ENV  := UID=$(shell id -u) GID=$(shell id -g)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup check gpu gpu-bench hw-profile hw-check test test-all clean clean-all \
@@ -22,7 +20,7 @@ DOCKER_ENV  := UID=$(shell id -u) GID=$(shell id -g)
         figures scenes hello inspect pose walk teleop \
         cartpole lunarlander pendulum tensorboard \
         exp1 exp2 exp3 experiments \
-        export-random train-gpu docker-build docker-shell docker-check docker-figures docker-viewer \
+        export-random train-gpu \
         compile lint-imports
 
 # --- meta --------------------------------------------------------------------
@@ -142,24 +140,6 @@ pendulum:  ## Train PPO on Pendulum-v1 (~10 min, CPU) [no-policy]
 
 tensorboard:  ## Serve training curves at http://localhost:6006 [no-policy]
 	$(VENV)/bin/tensorboard --logdir $(STAGE1)/tb_logs
-
-# --- Docker -------------------------------------------------------------------
-
-docker-build:  ## Build the CPU image (~2 GB)
-	$(DOCKER_ENV) $(COMPOSE) build
-
-docker-shell:  ## Interactive shell in the container
-	$(DOCKER_ENV) $(COMPOSE) run --rm lab
-
-docker-check:  ## Environment report inside the container [no-policy]
-	$(DOCKER_ENV) $(COMPOSE) run --rm headless python scripts/check_env.py
-
-docker-figures:  ## Regenerate figures inside the container [no-policy]
-	$(DOCKER_ENV) $(COMPOSE) run --rm headless \
-	  python $(EXP)/make_figures.py
-
-docker-viewer:  ## MuJoCo GUI via host X11 (run `xhost +local:docker` first)
-	$(DOCKER_ENV) $(COMPOSE) run --rm viewer
 
 # --- housekeeping -------------------------------------------------------------
 

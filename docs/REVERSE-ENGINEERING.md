@@ -336,7 +336,7 @@ timestep counts had disagreed with the scripts (25k vs 100k, 300k vs 1M,
 ### Infrastructure ✅ (added in this branch)
 
 - `requirements.txt`, `scripts/setup_env.sh`, `scripts/check_env.py`
-- Docker image + 4 compose services (lab / headless / viewer / tensorboard)
+- ~~Docker image + 4 compose services~~ removed — host-native only
 - `paths.py` portability layer
 - This documentation set
 

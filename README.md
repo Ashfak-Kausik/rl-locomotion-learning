@@ -182,7 +182,6 @@ rl-locomotion-learning/
 ├── tests/                             93 tests; none need policy weights
 ├── docs/                              architecture, SRS, TDD, features, setup
 ├── scripts/                           setup_env.sh, check_env.py
-├── docker/                            Dockerfile + 4 compose services
 ├── policies/                          walk-these-ways checkpoints (not committed)
 └── media/                             demo GIFs
 ```
@@ -199,12 +198,8 @@ make help                       # see every available target
 make test                       # 91 tests, no policy weights needed
 ```
 
-Or run it containerised, with no host dependencies beyond Docker:
-
-```bash
-docker compose -f docker/compose.yaml build
-docker compose -f docker/compose.yaml run --rm lab
-```
+Host-native only — see [docs/NATIVE-SETUP.md](docs/NATIVE-SETUP.md) and
+[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 > **Note on the policy weights.** The pretrained `walk-these-ways` checkpoints
 > are a large external *input* to this project and are not committed. Stage 2
@@ -220,7 +215,7 @@ docker compose -f docker/compose.yaml run --rm lab
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | you want the system view, with diagrams |
 | [docs/TECH-STACK-PRIMER.md](docs/TECH-STACK-PRIMER.md) | MuJoCo / PyTorch / Gymnasium are new to you |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | setting up, or something will not install |
-| [docs/DOCKER.md](docs/DOCKER.md) | running in a container |
+| [docs/NATIVE-SETUP.md](docs/NATIVE-SETUP.md) | host package inventory and GPU gotchas |
 | [docs/SRS.md](docs/SRS.md) · [docs/TDD.md](docs/TDD.md) | requirements and design rationale |
 | [docs/FEATURES.md](docs/FEATURES.md) | what is implemented vs planned |
 | [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) | known issues and good first tasks |

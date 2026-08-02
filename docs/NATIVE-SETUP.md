@@ -1,9 +1,7 @@
-# Native setup — running without Docker
+# Native setup
 
 A record of what is installed **directly on the host** to run this project,
-and proof that each piece works. Docker is not used here; the container path
-is still documented in [`DOCKER.md`](DOCKER.md) and remains valid, it is just
-not the route this machine takes.
+and proof that each piece works. This is the only supported install path.
 
 If you are setting up a *new* machine, do not follow this file by hand — run
 the standalone bootstrap, which derives the same list and skips whatever is
@@ -114,7 +112,6 @@ To go back to CPU-only: `pip install torch --index-url https://download.pytorch.
 
 | | Why |
 |---|---|
-| `nvidia-container-toolkit` | only needed for the Docker `gpu` service; Docker is unused here |
 | `mujoco-mjx`, `jax[cuda12]` | the MJX port is designed but not written — see Stage 3 README |
 | walk-these-ways policy weights (in **this repo's git**) | not committed here on purpose — `policies/` is gitignored, they are a large external input. **They ARE downloadable** — see below and [`DEPENDENCIES.md` §6](DEPENDENCIES.md#6-the-policy-weights-are-not-committed-here-but-are-downloadable) |
 
@@ -222,7 +219,6 @@ unaffected — prefer it for anything scripted.
 
 - [`DEPENDENCIES.md`](DEPENDENCIES.md) — the full checklist and why each item exists
 - [`DEPENDENCIES.md` §4.1](DEPENDENCIES.md#41-gpu-flavours--nvidia-intel-arc-amd-apple) — NVIDIA / Arc / ROCm / MPS install paths
-- [`DOCKER.md`](DOCKER.md) — the container route, if you change your mind
 - `hardware/profiles/` — committed machine records (`make hw-profile`)
 - `stage3-go2-training/tune_profiles.py` — per-backend PPO batch sizes
 - [`../stage3-go2-training/README.md`](../stage3-go2-training/README.md) — GPU tuning and measured speedups

@@ -225,7 +225,7 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | `ARCHITECTURE.md` | ✅ | text diagrams |
 | `TECH-STACK-PRIMER.md` | ✅ | tech basics |
 | `DEPENDENCIES.md` | ✅ | checklist + troubleshooting |
-| `DOCKER.md` | ✅ | container workflows |
+| `DOCKER.md` | ❌ | removed — host-native only |
 | `SRS.md` | ✅ | requirements |
 | `TDD.md` | ✅ | design decisions |
 | `FEATURES.md` | ✅ | this file |
@@ -246,16 +246,9 @@ lines): policy collapse at ~860k steps on LunarLander; `clip_fraction` 0.45 and
 | Per-GPU PPO tune profiles | ✅ | `stage3-go2-training/tune_profiles.py` |
 | Checkpoint reward diagnosis | ✅ | `stage3-go2-training/diagnose.py` |
 | Machine-independent paths | ✅ | `paths.py` |
-| Docker image (CPU-only) | ✅ | `docker/Dockerfile` |
-| Compose: interactive shell | ✅ | `lab` |
-| Compose: headless batch | ✅ | `headless` |
-| Compose: X11 GUI | ✅ | `viewer` |
-| Compose: TensorBoard | ✅ | `tensorboard` |
-| Host-uid file ownership | ✅ | build args |
-| Headless rendering (OSMesa) | ✅ | verified in container |
+| Headless rendering (OSMesa / EGL) | ✅ | `MUJOCO_GL=osmesa` / `egl` on host |
 | Make targets | ✅ | `Makefile` |
 | `.gitignore` for large artefacts | ✅ | rewritten |
-| `.dockerignore` | ✅ | — |
 | Automated tests | ✅ | `tests/` — 93 tests, ~3 s, no policy weights |
 | CI pipeline | ❌ | removed — use `make test` / `check_env.py` locally |
 | Make targets for tests + Stage 3 | ✅ | `make test`, `make train-smoke`, `make export` |

@@ -69,16 +69,7 @@ make hw-check            # does this host match a known profile?
 make check               # 4-layer dependency report
 ```
 
-### Path B — Docker (most reproducible)
-
-```bash
-docker compose -f docker/compose.yaml build
-docker compose -f docker/compose.yaml run --rm lab
-```
-
-Zero host dependencies beyond Docker itself. See [DOCKER.md](DOCKER.md).
-
-### Path C — manual
+### Path B — manual
 
 Follow §3 and §4 below by hand.
 
@@ -456,7 +447,6 @@ Apple it is not the primary tool — rely on `check_env.py` + a `--smoke` train.
 | `Image width N > framebuffer width 640` | MuJoCo's offscreen framebuffer defaults to 640×480 | set `model.vis.global_.offwidth/offheight` before constructing `mujoco.Renderer` |
 | `nvidia-smi: Driver/library version mismatch` | driver updated without reboot | reboot — or ignore, Stages 1–2 are CPU-only |
 | `python3 -m venv` fails | venv split into its own package | `sudo apt install python3-venv` |
-| Docker files owned by root | uid mismatch | `UID=$(id -u) GID=$(id -g) docker compose ... build` |
 | pip downloads a 2.5 GB torch | CUDA wheel resolved | install torch first from the CPU index (§4), or pass `--gpu cpu` |
 
 Still stuck? `python scripts/check_env.py` prints exactly which layer failed
