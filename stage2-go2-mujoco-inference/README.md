@@ -19,3 +19,10 @@ Goal: deploy a pretrained `walk-these-ways` policy on a Unitree Go2 in MuJoCo.
 ### Result
 Pretrained policy walks the Go2 forward at ~0.28 m/s sustained for 60s+.
 Minor yaw drift remains (open issue, low priority).
+
+### Reproducing this locally
+- Checkpoint: not committed (binary, git-ignored). Run `../download_policy.sh`
+  from the repo root to fetch and hash-verify it into `checkpoints/`
+  (override the location with the `GO2_POLICY_DIR` env var).
+- Dependencies: pinned in `../requirements.txt`.
+- Training configuration and provenance: see `TRAINING_CONFIG.md`.
