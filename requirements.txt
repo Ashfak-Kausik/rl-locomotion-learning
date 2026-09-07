@@ -1,0 +1,9 @@
+# Exact versions installed and used for the results in this repository
+# (audited 2026-09, Python 3.10.12). Pin these to reproduce results
+# bit-for-bit; newer releases of mujoco/torch/numpy are not guaranteed to
+# reproduce the committed CSVs exactly (see AUDIT.md Part A.3).
+mujoco==3.8.0
+torch==2.11.0
+numpy==2.2.6
+gymnasium==1.2.3
+glfw==2.10.0
