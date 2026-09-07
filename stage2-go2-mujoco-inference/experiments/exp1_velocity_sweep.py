@@ -8,12 +8,15 @@ Protocol:
   - Terrain: flat
   - Gait: trot
   - Commanded forward velocities: {0.0, 0.25, 0.5, 0.75, 1.0, 1.5} m/s
-  - 5 trials per velocity (seeds 0-4)
+  - 30 trials per velocity (seeds 0-29)
   - 3 s settle + 30 s measurement window
 
 Outputs:
-  - results/exp1_velocity_sweep.csv   (one row per trial)
+  - results/exp1_velocity_sweep_30seed.csv   (one row per trial)
   - Printed summary table (mean ± std per velocity)
+
+The original 5-seed run (seeds 0-4) is preserved unchanged at
+results/exp1_velocity_sweep.csv -- this script no longer writes there.
 """
 
 import os
@@ -29,11 +32,11 @@ SCENE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "scenes", "go2_flat.xml")
 )
 VELOCITIES = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5]
-N_TRIALS = 5
+N_TRIALS = 30
 SETTLE_S = 3.0
 MEASURE_S = 30.0
 RESULTS_CSV = os.path.join(os.path.dirname(__file__), "results",
-                           "exp1_velocity_sweep.csv")
+                           "exp1_velocity_sweep_30seed.csv")
 
 CSV_FIELDS = [
     "scene", "cmd_vx", "cmd_vy", "cmd_yaw", "gait", "seed",

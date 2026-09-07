@@ -8,7 +8,7 @@ generalize to terrain it never saw before failing?
 Protocol:
   3a Slopes: incline {5,10,15,20,25} deg, trot, cmd_vx=0.5 m/s, uphill
   3b Stairs: step height {2,5,8,12,16} cm, trot, cmd_vx=0.5 m/s
-  5 independent trials per condition, 3s settle + 20s measure
+  30 independent trials per condition, 3s settle + 20s measure
   (20s, shorter than Exp1/2's 30s: terrain trials either succeed or fail
    fast; 20s is enough to traverse the run-up and engage the terrain)
 
@@ -17,11 +17,14 @@ Metrics per condition:
   - mean forward progress (distance traveled, indicates ascent vs stall)
   - of survivors: tracking error, drift, height stability
 
-"Traversable" threshold = survival >= 80% (>=4/5 trials).
+"Traversable" threshold = survival >= 80% (>=24/30 trials).
 
 Outputs:
-  - results/exp3_terrain.csv
+  - results/exp3_terrain_30seed.csv
   - Printed summary tables (slopes, stairs)
+
+The original 5-seed run (seeds 0-4) is preserved unchanged at
+results/exp3_terrain.csv -- this script no longer writes there.
 """
 
 import os
@@ -36,11 +39,11 @@ SCENES_DIR = os.path.abspath(
 SLOPE_ANGLES = [5, 10, 15, 20, 25]
 STEP_HEIGHTS_CM = [2, 5, 8, 12, 16]
 CMD_VX = 0.5
-N_TRIALS = 5
+N_TRIALS = 30
 SETTLE_S = 3.0
 MEASURE_S = 20.0
 RESULTS_CSV = os.path.join(os.path.dirname(__file__), "results",
-                           "exp3_terrain.csv")
+                           "exp3_terrain_30seed.csv")
 
 CSV_FIELDS = [
     "scene", "cmd_vx", "cmd_vy", "cmd_yaw", "gait", "seed",

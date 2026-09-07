@@ -9,11 +9,14 @@ Protocol:
   - Terrain: flat
   - Commanded forward velocity: fixed 0.5 m/s
   - Gaits: {trot, pace, bound}
-  - 5 independent trials per gait (seeds 0-4), 3s settle + 30s measure
+  - 30 independent trials per gait (seeds 0-29), 3s settle + 30s measure
 
 Outputs:
-  - results/exp2_gait_robustness.csv
+  - results/exp2_gait_robustness_30seed.csv
   - Printed summary table (survival, tracking, drift per gait)
+
+The original 5-seed run (seeds 0-4) is preserved unchanged at
+results/exp2_gait_robustness.csv -- this script no longer writes there.
 """
 
 import os
@@ -27,11 +30,11 @@ SCENE = os.path.abspath(
 )
 GAITS = ["trot", "pace", "bound"]
 CMD_VX = 0.5
-N_TRIALS = 5
+N_TRIALS = 30
 SETTLE_S = 3.0
 MEASURE_S = 30.0
 RESULTS_CSV = os.path.join(os.path.dirname(__file__), "results",
-                           "exp2_gait_robustness.csv")
+                           "exp2_gait_robustness_30seed.csv")
 
 CSV_FIELDS = [
     "scene", "cmd_vx", "cmd_vy", "cmd_yaw", "gait", "seed",
