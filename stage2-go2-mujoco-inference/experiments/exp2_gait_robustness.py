@@ -19,9 +19,8 @@ Outputs:
 import os
 import csv
 import numpy as np
-import torch
 
-from harness import run_trial, POLICY_DIR
+from harness import run_trials_parallel, physical_core_count
 
 SCENE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "scenes", "go2_flat.xml")
@@ -48,35 +47,31 @@ def main():
     print(f"Gaits: {GAITS}")
     print(f"Trials per gait: {N_TRIALS}")
     print(f"Total trials: {len(GAITS) * N_TRIALS}")
+    n_workers = physical_core_count()
+    print(f"Workers: {n_workers} (physical cores)")
     print("=" * 70)
 
-    print("Loading policy networks...")
-    body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
-    body_net.eval()
-    adapt_net = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")
-    adapt_net.eval()
-    print("Policy loaded.\n")
-
-    all_rows = []
+    jobs = [
+        dict(scene_path=SCENE, lin_vel_x=CMD_VX, lin_vel_y=0.0, ang_vel_yaw=0.0,
+             gait=gait, settle_s=SETTLE_S, measure_s=MEASURE_S, seed=seed)
+        for gait in GAITS
+        for seed in range(N_TRIALS)
+    ]
+    print("Running trials in parallel...")
+    all_rows = run_trials_parallel(jobs, n_workers=n_workers)
+    print("Done.\n")
 
     for gait in GAITS:
         print(f"--- Gait: {gait} ---")
-        for seed in range(N_TRIALS):
-            result = run_trial(
-                SCENE,
-                lin_vel_x=CMD_VX, lin_vel_y=0.0, ang_vel_yaw=0.0,
-                gait=gait,
-                settle_s=SETTLE_S, measure_s=MEASURE_S,
-                body_net=body_net, adapt_net=adapt_net,
-                seed=seed,
-            )
-            all_rows.append(result)
-            if result["fell"]:
-                print(f"  seed {seed}: FELL @ {result['fall_time_s']:.1f}s")
+        for row in all_rows:
+            if row["gait"] != gait:
+                continue
+            if row["fell"]:
+                print(f"  seed {row['seed']}: FELL @ {row['fall_time_s']:.1f}s")
             else:
-                print(f"  seed {seed}: vx={result['mean_vx']:.3f} "
-                      f"drift={result['lateral_drift']:.3f} "
-                      f"h_std={result['height_std']:.3f}")
+                print(f"  seed {row['seed']}: vx={row['mean_vx']:.3f} "
+                      f"drift={row['lateral_drift']:.3f} "
+                      f"h_std={row['height_std']:.3f}")
         print()
 
     os.makedirs(os.path.dirname(RESULTS_CSV), exist_ok=True)

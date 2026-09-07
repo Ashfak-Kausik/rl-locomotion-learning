@@ -27,9 +27,8 @@ Outputs:
 import os
 import csv
 import numpy as np
-import torch
 
-from harness import run_trial, POLICY_DIR
+from harness import run_trials_parallel, physical_core_count
 
 SCENES_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "scenes")
@@ -50,24 +49,27 @@ CSV_FIELDS = [
 ]
 
 
-def run_condition(label, scene_file, body_net, adapt_net, all_rows):
+def condition_jobs(scene_file):
     scene_path = os.path.join(SCENES_DIR, scene_file)
+    return [
+        dict(scene_path=scene_path, lin_vel_x=CMD_VX, lin_vel_y=0.0,
+             ang_vel_yaw=0.0, gait="trot", settle_s=SETTLE_S,
+             measure_s=MEASURE_S, seed=seed)
+        for seed in range(N_TRIALS)
+    ]
+
+
+def print_condition(label, scene_file, all_rows):
     print(f"--- {label}  ({scene_file}) ---")
-    for seed in range(N_TRIALS):
-        result = run_trial(
-            scene_path,
-            lin_vel_x=CMD_VX, lin_vel_y=0.0, ang_vel_yaw=0.0,
-            gait="trot",
-            settle_s=SETTLE_S, measure_s=MEASURE_S,
-            body_net=body_net, adapt_net=adapt_net,
-            seed=seed,
-        )
-        all_rows.append(result)
-        if result["fell"]:
-            print(f"  seed {seed}: FELL @ {result['fall_time_s']:.1f}s")
+    for row in all_rows:
+        if row["scene"] != scene_file:
+            continue
+        if row["fell"]:
+            print(f"  seed {row['seed']}: FELL @ {row['fall_time_s']:.1f}s")
         else:
-            print(f"  seed {seed}: SURVIVED  dist={result['distance_traveled']:.2f}m "
-                  f"vx={result['mean_vx']:.3f}")
+            print(f"  seed {row['seed']}: SURVIVED  "
+                  f"dist={row['distance_traveled']:.2f}m "
+                  f"vx={row['mean_vx']:.3f}")
     print()
 
 
@@ -118,26 +120,28 @@ def main():
     print(f"Slopes: {SLOPE_ANGLES} deg | Stairs: {STEP_HEIGHTS_CM} cm")
     print(f"cmd_vx={CMD_VX} m/s, trot, {N_TRIALS} trials each")
     print(f"Total trials: {(len(SLOPE_ANGLES)+len(STEP_HEIGHTS_CM))*N_TRIALS}")
+    n_workers = physical_core_count()
+    print(f"Workers: {n_workers} (physical cores)")
     print("=" * 70)
 
-    print("Loading policy networks...")
-    body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
-    body_net.eval()
-    adapt_net = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")
-    adapt_net.eval()
-    print("Policy loaded.\n")
+    slope_files = [f"go2_slope_{a:02d}.xml" for a in SLOPE_ANGLES]
+    stair_files = [f"go2_stairs_{h:02d}.xml" for h in STEP_HEIGHTS_CM]
 
-    all_rows = []
+    jobs = []
+    for scene_file in slope_files + stair_files:
+        jobs.extend(condition_jobs(scene_file))
+
+    print("Running trials in parallel...")
+    all_rows = run_trials_parallel(jobs, n_workers=n_workers)
+    print("Done.\n")
 
     print(">>> 3a — SLOPES\n")
-    for ang in SLOPE_ANGLES:
-        run_condition(f"Slope {ang} deg", f"go2_slope_{ang:02d}.xml",
-                       body_net, adapt_net, all_rows)
+    for ang, scene_file in zip(SLOPE_ANGLES, slope_files):
+        print_condition(f"Slope {ang} deg", scene_file, all_rows)
 
     print(">>> 3b — STAIRS\n")
-    for h in STEP_HEIGHTS_CM:
-        run_condition(f"Stairs {h} cm", f"go2_stairs_{h:02d}.xml",
-                       body_net, adapt_net, all_rows)
+    for h, scene_file in zip(STEP_HEIGHTS_CM, stair_files):
+        print_condition(f"Stairs {h} cm", scene_file, all_rows)
 
     os.makedirs(os.path.dirname(RESULTS_CSV), exist_ok=True)
     with open(RESULTS_CSV, "w", newline="") as f:

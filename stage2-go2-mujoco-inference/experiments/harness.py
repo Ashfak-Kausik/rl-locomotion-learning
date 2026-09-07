@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import mujoco
 from collections import deque
+import multiprocessing as mp
 
 # ============================================================================
 # CONSTANTS (must match the inference scripts exactly)
@@ -271,6 +272,80 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
         "height_std": round(float(h_arr.std()), 4),
         "distance_traveled": round(float(dist), 4) if dist is not None else None,
     }
+
+
+# ============================================================================
+# PARALLEL EXECUTION
+#
+# Trials are independent (per-trial np.random.default_rng(seed), no shared
+# global RNG or state -- see AUDIT.md Part C.2), so they can be distributed
+# across a process pool with no seeding changes. Each worker loads its own
+# copy of the two policy nets once (mirroring how exp1/exp2/exp3 already
+# load nets once and reuse them across trials) and pins itself to a single
+# thread so torch/BLAS don't oversubscribe the pool.
+# ============================================================================
+_worker_body_net = None
+_worker_adapt_net = None
+
+
+def physical_core_count():
+    """Best-effort physical (not hyperthreaded) core count on Linux, falling
+    back to os.cpu_count() elsewhere."""
+    try:
+        core_ids = set()
+        phys_id = None
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("physical id"):
+                    phys_id = line.split(":", 1)[1].strip()
+                elif line.startswith("core id"):
+                    core_id = line.split(":", 1)[1].strip()
+                    core_ids.add((phys_id, core_id))
+        if core_ids:
+            return len(core_ids)
+    except OSError:
+        pass
+    return max(1, os.cpu_count() or 1)
+
+
+def _pool_worker_init(policy_dir):
+    """Runs once per worker process before any task is executed."""
+    global _worker_body_net, _worker_adapt_net
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    torch.set_num_threads(1)
+    _worker_body_net = torch.jit.load(f"{policy_dir}/body_latest.jit")
+    _worker_body_net.eval()
+    _worker_adapt_net = torch.jit.load(f"{policy_dir}/adaptation_module_latest.jit")
+    _worker_adapt_net.eval()
+
+
+def _pool_run_trial(job_kwargs):
+    return run_trial(body_net=_worker_body_net, adapt_net=_worker_adapt_net,
+                      **job_kwargs)
+
+
+def run_trials_parallel(jobs, n_workers=None, policy_dir=None):
+    """
+    Run a list of trials (each a dict of run_trial kwargs, WITHOUT body_net/
+    adapt_net) across a multiprocessing pool sized to physical cores.
+
+    Returns results in the same order as `jobs` (order-preserving, unlike
+    imap_unordered), so callers can assume result[i] corresponds to jobs[i].
+    """
+    if n_workers is None:
+        n_workers = physical_core_count()
+    if policy_dir is None:
+        policy_dir = POLICY_DIR
+
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(
+        processes=n_workers,
+        initializer=_pool_worker_init,
+        initargs=(policy_dir,),
+    ) as pool:
+        return pool.map(_pool_run_trial, jobs)
 
 
 if __name__ == "__main__":

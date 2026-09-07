@@ -19,9 +19,8 @@ Outputs:
 import os
 import csv
 import numpy as np
-import torch
 
-from harness import run_trial, POLICY_DIR
+from harness import run_trials_parallel, physical_core_count
 
 # ----------------------------------------------------------------------------
 # Configuration
@@ -51,33 +50,28 @@ def main():
     print(f"Trials per velocity: {N_TRIALS}")
     print(f"Settle: {SETTLE_S}s | Measure: {MEASURE_S}s")
     print(f"Total trials: {len(VELOCITIES) * N_TRIALS}")
+    n_workers = physical_core_count()
+    print(f"Workers: {n_workers} (physical cores)")
     print("=" * 70)
 
-    # Load policy networks ONCE and reuse across all trials (much faster)
-    print("Loading policy networks...")
-    body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
-    body_net.eval()
-    adapt_net = torch.jit.load(f"{POLICY_DIR}/adaptation_module_latest.jit")
-    adapt_net.eval()
-    print("Policy loaded.\n")
-
-    all_rows = []
+    jobs = [
+        dict(scene_path=SCENE, lin_vel_x=v, lin_vel_y=0.0, ang_vel_yaw=0.0,
+             gait="trot", settle_s=SETTLE_S, measure_s=MEASURE_S, seed=seed)
+        for v in VELOCITIES
+        for seed in range(N_TRIALS)
+    ]
+    print("Running trials in parallel...")
+    all_rows = run_trials_parallel(jobs, n_workers=n_workers)
+    print("Done.\n")
 
     for v in VELOCITIES:
         print(f"--- Commanded velocity: {v:.2f} m/s ---")
-        for seed in range(N_TRIALS):
-            result = run_trial(
-                SCENE,
-                lin_vel_x=v, lin_vel_y=0.0, ang_vel_yaw=0.0,
-                gait="trot",
-                settle_s=SETTLE_S, measure_s=MEASURE_S,
-                body_net=body_net, adapt_net=adapt_net,
-                seed=seed,
-            )
-            all_rows.append(result)
-            status = "FELL @ %.1fs" % result["fall_time_s"] if result["fell"] \
-                else f"vx={result['mean_vx']:.3f} drift={result['lateral_drift']:.3f}"
-            print(f"  seed {seed}: {status}")
+        for row in all_rows:
+            if row["cmd_vx"] != v:
+                continue
+            status = "FELL @ %.1fs" % row["fall_time_s"] if row["fell"] \
+                else f"vx={row['mean_vx']:.3f} drift={row['lateral_drift']:.3f}"
+            print(f"  seed {row['seed']}: {status}")
         print()
 
     # Write CSV
