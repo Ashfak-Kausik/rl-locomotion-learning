@@ -15,7 +15,8 @@ Architecture:
 Policy runs at 50 Hz (every 10th physics step at 0.002s timestep).        
 """
 
-import mujoco 
+import os
+import mujoco
 import mujoco.viewer
 import numpy as np
 import torch
@@ -24,7 +25,12 @@ from collections import deque
 
 # PATHS and CONSTANTS
 MODEL_PATH = "/home/user/projects/mujoco_menagerie/unitree_go2/scene.xml"
-POLICY_DIR = "/home/user/projects/robot-dog-sim/walk-these-ways-go2/runs/gait-conditioned-agility/pretrain-go2/train/142238.667503/checkpoints"
+# Repo-relative default; override with GO2_POLICY_DIR to point at a
+# different checkpoint directory (e.g. one restored by download_policy.sh).
+POLICY_DIR = os.environ.get(
+    "GO2_POLICY_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints"),
+)
 
 # Training using these exact values - must match for sim-to-sim transfer. 
 DEFAULT_JOINT_POS = np.array([

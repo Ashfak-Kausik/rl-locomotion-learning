@@ -11,3 +11,6 @@ tb_logs/
 *.zip
 tb_logs/
 __pycache__/
+
+# Pretrained policy checkpoints (fetched via download_policy.sh, not committed)
+stage2-go2-mujoco-inference/checkpoints/
