@@ -1,0 +1,11 @@
+condition,scene,n,n_survived,survival_rate,survival_ci95_lo,survival_ci95_hi,mean_dist,dist_sd,mean_vx,vx_sd,traversable
+slope_5deg,go2_slope_05.xml,30,30,1.0,0.8865,1.0,5.7624,0.0006,0.2839,0.0015,YES
+slope_10deg,go2_slope_10.xml,30,30,1.0,0.8865,1.0,5.424,0.0097,0.2695,0.0004,YES
+slope_15deg,go2_slope_15.xml,30,11,0.3667,0.2187,0.5449,4.7775,0.0166,0.2198,0.0015,no
+slope_20deg,go2_slope_20.xml,30,0,0.0,0.0,0.1135,,,,,no
+slope_25deg,go2_slope_25.xml,30,0,0.0,0.0,0.1135,,,,,no
+stairs_2cm,go2_stairs_02.xml,30,30,1.0,0.8865,1.0,4.0889,0.3137,0.0619,0.05,YES
+stairs_5cm,go2_stairs_05.xml,30,30,1.0,0.8865,1.0,0.4725,0.0146,0.0236,0.0007,no
+stairs_8cm,go2_stairs_08.xml,30,30,1.0,0.8865,1.0,0.4727,0.0144,0.0236,0.0007,no
+stairs_12cm,go2_stairs_12.xml,30,30,1.0,0.8865,1.0,0.4725,0.0145,0.0236,0.0007,no
+stairs_16cm,go2_stairs_16.xml,30,30,1.0,0.8865,1.0,0.479,0.014,0.0238,0.0007,no

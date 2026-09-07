@@ -7,3 +7,8 @@ torch==2.11.0
 numpy==2.2.6
 gymnasium==1.2.3
 glfw==2.10.0
+
+# Added for the 30-seed statistical re-run (Phase 2): Welch's t-test,
+# t-distribution critical values. Not part of the original audited
+# environment above -- pinned separately at the version actually used.
+scipy==1.15.3

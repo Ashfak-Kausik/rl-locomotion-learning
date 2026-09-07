@@ -1,0 +1,10 @@
+metric,gait_a,gait_b,mean_a,mean_b,t_stat,p_raw,cohens_d,p_holm,significant_holm_0.05
+vel_track_err,trot,pace,0.27318,0.17567,72.6226,1.4279e-58,18.7511,7.1393e-58,True
+vel_track_err,trot,bound,0.27318,0.33205,-40.5627,6.5734e-44,-10.4732,2.6293e-43,True
+vel_track_err,pace,bound,0.17567,0.33205,-109.6887,9.3008e-68,-28.3215,6.5105e-67,True
+lateral_drift,trot,pace,0.16277,0.09371,21.8956,9.7394e-24,5.6534,9.7394e-24,True
+lateral_drift,trot,bound,0.16277,0.20241,-29.7343,6.3532e-27,-7.6774,1.9060e-26,True
+lateral_drift,pace,bound,0.09371,0.20241,-37.1604,7.3082e-27,-9.5948,1.9060e-26,True
+height_std,trot,pace,0.006,0.0109,-6802676536426966.0,0.0000e+00,-1756443529014506.0,0.0000e+00,True
+height_std,trot,bound,0.006,0.00211,615.7166,3.0148e-61,158.9773,1.8089e-60,True
+height_std,pace,bound,0.0109,0.00211,1391.9631,1.6087e-71,359.4033,1.2870e-70,True
