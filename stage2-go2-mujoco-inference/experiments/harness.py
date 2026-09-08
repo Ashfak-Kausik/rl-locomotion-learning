@@ -123,14 +123,34 @@ def build_obs(data, commands_vec, gait_params, prev_action, last_action, gait_ph
 # ============================================================================
 # CORE: run one trial
 # ============================================================================
+FOOT_GEOM_NAMES = ("FL", "FR", "RL", "RR")
+
+
 def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
               gait="trot", settle_s=3.0, measure_s=30.0,
-              body_net=None, adapt_net=None, seed=0):
+              body_net=None, adapt_net=None, seed=0,
+              floor_friction=None, floor_solref=None, floor_geom_name="floor",
+              foot_friction=None):
     """
     Run one headless trial. Returns a metrics dict.
 
     The policy nets can be passed in (to avoid reloading every trial).
     If None, they are loaded here.
+
+    floor_friction / floor_solref: optional in-memory overrides for the
+    named floor geom's contact parameters (sliding/torsional/rolling
+    friction triplet, and [timeconst, dampratio] respectively). Applied
+    after loading the model from XML, before any stepping -- no scene
+    file is modified or created. Only the geom named `floor_geom_name`
+    is touched; foot friction (set explicitly in go2.xml) is untouched.
+
+    foot_friction: optional in-memory override (sliding/torsional/rolling
+    triplet) applied to all four foot geoms (FOOT_GEOM_NAMES). Because the
+    foot geoms carry priority="1" (go2.xml) while the floor defaults to
+    priority="0", the foot's friction -- not the floor's -- is the value
+    MuJoCo's contact solver actually uses (see SENSITIVITY_REPORT.md).
+    go2.xml itself is never modified; this mutates the compiled MjModel
+    in memory only.
     """
     if body_net is None:
         body_net = torch.jit.load(f"{POLICY_DIR}/body_latest.jit")
@@ -140,6 +160,23 @@ def run_trial(scene_path, lin_vel_x=0.5, lin_vel_y=0.0, ang_vel_yaw=0.0,
         adapt_net.eval()
 
     model = mujoco.MjModel.from_xml_path(scene_path)
+
+    if floor_friction is not None or floor_solref is not None:
+        floor_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, floor_geom_name)
+        if floor_gid < 0:
+            raise ValueError(f"geom '{floor_geom_name}' not found in {scene_path}")
+        if floor_friction is not None:
+            model.geom_friction[floor_gid] = floor_friction
+        if floor_solref is not None:
+            model.geom_solref[floor_gid] = floor_solref
+
+    if foot_friction is not None:
+        for name in FOOT_GEOM_NAMES:
+            gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            if gid < 0:
+                raise ValueError(f"geom '{name}' not found in {scene_path}")
+            model.geom_friction[gid] = foot_friction
+
     data = mujoco.MjData(model)
 
     # Reset to keyframe, override with training default pose
