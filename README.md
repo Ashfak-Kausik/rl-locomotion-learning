@@ -135,4 +135,13 @@ Full inference pipeline from MuJoCo state → 70-dim observation vector → adap
 
 ---
 
+## Reproducing These Results
+
+- **Policy provenance & training configuration** — [`stage2-go2-mujoco-inference/TRAINING_CONFIG.md`](./stage2-go2-mujoco-inference/TRAINING_CONFIG.md) documents where the pretrained checkpoint came from and the actual Isaac Gym training configuration (algorithm, control type, domain-randomization ranges, reward terms). See also [`AUDIT.md`](./AUDIT.md) for a full reproducibility audit and [`SENSITIVITY_REPORT.md`](./SENSITIVITY_REPORT.md) for the friction/contact-stiffness sensitivity analysis.
+- **Policy checkpoint** — not vendored in this repo. Run [`download_policy.sh`](./download_policy.sh) to fetch and SHA-256-verify `body_latest.jit` and `adaptation_module_latest.jit` from this repo's GitHub release.
+- **Environment** — pinned dependency versions are in [`requirements.txt`](./requirements.txt).
+- **Raw per-trial data** — [`stage2-go2-mujoco-inference/experiments/results/`](./stage2-go2-mujoco-inference/experiments/results/) contains one CSV row per trial for every experiment, at both the original 5-seed runs (`exp{1,2,3}_*.csv`) and the 30-seed re-runs (`exp{1,2,3}_*_30seed.csv`), plus the friction/contact-stiffness sweeps (`exp{4,5,6}_*.csv`) and their computed statistics (`stats_*.csv`).
+
+---
+
 ## Repository Structure
